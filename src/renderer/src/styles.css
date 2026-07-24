@@ -1,0 +1,75 @@
+:root {
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #202329;
+  background: #f3f4f6;
+  font-synthesis: none;
+  letter-spacing: 0;
+  --accent: #176b59;
+  --accent-soft: #e4f0ec;
+  --border: #dfe2e7;
+  --muted: #6b7280;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 980px; min-height: 640px; overflow: hidden; }
+button, textarea, input { font: inherit; letter-spacing: 0; }
+
+.app-shell { display: grid; grid-template-columns: 268px minmax(0, 1fr); height: 100vh; }
+.sidebar { display: flex; flex-direction: column; min-width: 0; padding: 16px 12px 12px; background: #eceef1; border-right: 1px solid var(--border); }
+.brand-row { display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 8px; font-weight: 650; }
+.brand-mark, .welcome-mark { display: grid; place-items: center; color: white; background: var(--accent); font-family: Georgia, serif; }
+.brand-mark { width: 28px; height: 28px; border-radius: 6px; font-size: 14px; }
+.brand-row .new-session { margin-left: auto; }
+.icon-button { width: 32px; height: 32px; }
+
+.workspace-button, .settings-button, .session-list button { width: 100%; border: 0; color: inherit; text-align: left; cursor: pointer; }
+.workspace-button { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 9px; align-items: center; margin-top: 14px; padding: 10px; border: 1px solid #d6dade; border-radius: 6px; background: #f8f9fa; }
+.workspace-button span { min-width: 0; }
+.workspace-button strong, .workspace-button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-button strong { font-size: 13px; font-weight: 600; }
+.workspace-button small { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.sidebar-label { padding: 22px 10px 7px; color: #818791; font-size: 11px; font-weight: 650; text-transform: uppercase; }
+.session-list { flex: 1; min-height: 0; overflow-y: auto; }
+.session-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 10px; border-radius: 5px; background: transparent; }
+.session-list button:hover { background: #e2e5e9; }
+.session-list button.active { background: #d9e8e3; color: #0d5748; }
+.session-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.session-list small { color: var(--muted); font-size: 10px; }
+.empty-list { padding: 12px 10px; color: var(--muted); font-size: 12px; }
+.settings-button { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px; border-radius: 5px; background: transparent; }
+.settings-button:hover { background: #e2e5e9; }
+.settings-button span { font-size: 13px; }
+.settings-button small { max-width: 90px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+
+.main-panel { display: grid; grid-template-rows: 64px minmax(0, 1fr) auto; min-width: 0; background: #fafafa; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--border); background: rgba(250, 250, 250, .96); }
+.topbar h1 { margin: 0; font-size: 15px; font-weight: 650; }
+.topbar p { max-width: 700px; margin: 4px 0 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.messages { overflow-y: auto; padding: 30px max(32px, calc((100% - 820px) / 2)); scroll-behavior: smooth; }
+.welcome-state { display: grid; justify-items: center; padding-top: min(16vh, 130px); color: var(--muted); text-align: center; }
+.welcome-mark { width: 50px; height: 50px; border-radius: 8px; font-size: 22px; }
+.welcome-state h2 { margin: 18px 0 7px; color: #292d33; font-size: 19px; }
+.welcome-state p { margin: 0; font-size: 13px; }
+.message { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 14px; padding: 17px 0; border-bottom: 1px solid #e9ebee; }
+.message-role { color: var(--muted); font-size: 12px; font-weight: 650; }
+.message.assistant .message-role { color: var(--accent); }
+.message-body { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Cascadia Code", "Microsoft YaHei", monospace; font-size: 13px; line-height: 1.7; }
+.tool-log { margin: 12px 0 8px 68px; border-left: 2px solid #b9c4c0; color: var(--muted); font-family: "Cascadia Code", monospace; font-size: 11px; }
+.tool-log div { padding: 4px 10px; overflow-wrap: anywhere; }
+.tool-log .failed { color: #b42318; }
+.approval-panel { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 16px 0 16px 68px; padding: 14px 16px; border: 1px solid #e1c97c; border-radius: 6px; background: #fffaf0; }
+.approval-panel strong { font-size: 13px; }
+.approval-panel p { margin: 5px 0 0; overflow-wrap: anywhere; color: #6d5b28; font-family: "Cascadia Code", monospace; font-size: 11px; }
+.approval-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.composer-wrap { padding: 12px max(32px, calc((100% - 820px) / 2)) 20px; background: linear-gradient(to bottom, rgba(250,250,250,0), #fafafa 14%); }
+.composer { position: relative; border: 1px solid #ccd1d6; border-radius: 7px; background: white; box-shadow: 0 4px 18px rgba(28, 35, 42, .07); }
+.composer:focus-within { border-color: #679487; box-shadow: 0 0 0 3px rgba(23,107,89,.1); }
+.composer textarea { display: block; width: 100%; min-height: 88px; resize: none; padding: 14px 54px 14px 15px; border: 0; outline: 0; color: #23272d; background: transparent; line-height: 1.5; }
+.send-button { position: absolute; right: 10px; bottom: 10px; width: 34px; height: 34px; padding: 0; }
+.full-width { width: 100%; }
+.el-button--primary { --el-button-bg-color: var(--accent); --el-button-border-color: var(--accent); --el-button-hover-bg-color: #25806d; --el-button-hover-border-color: #25806d; }
+
+@media (max-width: 1080px) {
+  .app-shell { grid-template-columns: 230px minmax(0, 1fr); }
+  .messages, .composer-wrap { padding-left: 28px; padding-right: 28px; }
+}

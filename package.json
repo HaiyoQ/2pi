@@ -1,0 +1,51 @@
+{
+  "name": "2pi-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package:win": "npm run build && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.81.1",
+    "@earendil-works/pi-ai": "0.81.1",
+    "@earendil-works/pi-coding-agent": "0.81.1",
+    "element-plus": "2.10.7",
+    "lucide-vue-next": "0.468.0",
+    "pinia": "3.0.3",
+    "vue": "3.5.18"
+  },
+  "devDependencies": {
+    "@types/node": "22.17.1",
+    "@vitejs/plugin-vue": "6.0.1",
+    "@vue/test-utils": "2.4.6",
+    "electron": "37.2.6",
+    "electron-builder": "26.0.12",
+    "electron-vite": "4.0.0",
+    "jsdom": "26.1.0",
+    "typescript": "5.9.2",
+    "vite": "7.1.1",
+    "vitest": "3.2.4",
+    "vue-tsc": "3.0.5"
+  },
+  "build": {
+    "appId": "cn.2pi.agent",
+    "productName": "2π 编程助手",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
