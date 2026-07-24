@@ -39,16 +39,70 @@ export interface SessionSnapshot {
   messages: ChatMessage[]
 }
 
-export interface ModelConfig {
-  provider: string
-  modelId: string
-  apiKey?: string
+export type ProviderProtocol = 'openai-chat' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai'
+export type ProviderProfileType = 'builtin' | 'custom'
+
+export interface ProviderModel {
+  id: string
+  name: string
+  reasoning: boolean
 }
 
-export interface ModelOption {
-  provider: string
+export interface ProviderHeader {
+  name: string
+  hasValue: boolean
+}
+
+export interface ProviderHeaderDraft {
+  name: string
+  value?: string
+}
+
+export interface ProviderProfile {
+  id: string
+  type: ProviderProfileType
+  name: string
+  protocol: ProviderProtocol
+  baseUrl: string
+  models: ProviderModel[]
+  hasApiKey: boolean
+  headers: ProviderHeader[]
+}
+
+export interface ProviderDraft {
+  id?: string
+  type: ProviderProfileType
+  name: string
+  protocol: ProviderProtocol
+  baseUrl: string
+  models: ProviderModel[]
+  apiKey?: string
+  clearApiKey?: boolean
+  headers: ProviderHeaderDraft[]
+}
+
+export interface ProviderCatalogEntry {
+  id: string
+  name: string
+  protocol: ProviderProtocol
+  baseUrl: string
+  models: ProviderModel[]
+}
+
+export interface ActiveModel {
+  providerId: string
   modelId: string
+}
+
+export interface ModelOption extends ActiveModel {
+  providerName: string
   label: string
+}
+
+export interface ConnectionTestResult {
+  ok: boolean
+  message: string
+  models: ProviderModel[]
 }
 
 export interface WorkspaceConfig {
@@ -56,14 +110,20 @@ export interface WorkspaceConfig {
 }
 
 export interface AppSettings {
-  model: Omit<ModelConfig, 'apiKey'>
+  version: 2
+  providers: ProviderProfile[]
+  activeModel?: ActiveModel
   workspace: WorkspaceConfig
-  hasApiKey: boolean
+  runtimeBusy: boolean
 }
 
 export interface AgentBridge {
   getSettings(): Promise<AppSettings>
-  saveSettings(config: ModelConfig): Promise<AppSettings>
+  listProviderCatalog(): Promise<ProviderCatalogEntry[]>
+  saveProvider(draft: ProviderDraft): Promise<AppSettings>
+  deleteProvider(providerId: string): Promise<AppSettings>
+  testProvider(draft: ProviderDraft): Promise<ConnectionTestResult>
+  activateModel(model: ActiveModel): Promise<AppSettings>
   selectWorkspace(): Promise<WorkspaceConfig | null>
   listModels(): Promise<ModelOption[]>
   listSessions(): Promise<SessionSummary[]>
@@ -77,7 +137,11 @@ export interface AgentBridge {
 
 export const IPC = {
   getSettings: 'settings:get',
-  saveSettings: 'settings:save',
+  listProviderCatalog: 'providers:catalog',
+  saveProvider: 'providers:save',
+  deleteProvider: 'providers:delete',
+  testProvider: 'providers:test',
+  activateModel: 'models:activate',
   selectWorkspace: 'workspace:select',
   listModels: 'models:list',
   listSessions: 'sessions:list',

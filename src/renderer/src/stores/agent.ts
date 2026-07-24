@@ -1,10 +1,22 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { AgentEvent, AppSettings, ChatMessage, ModelOption, SessionSummary, ToolApprovalRequest } from '../../../shared/contracts'
+import type {
+  ActiveModel,
+  AgentEvent,
+  AppSettings,
+  ChatMessage,
+  ConnectionTestResult,
+  ModelOption,
+  ProviderCatalogEntry,
+  ProviderDraft,
+  SessionSummary,
+  ToolApprovalRequest
+} from '../../../shared/contracts'
 
 export const useAgentStore = defineStore('agent', () => {
   const settings = ref<AppSettings>()
   const models = ref<ModelOption[]>([])
+  const providerCatalog = ref<ProviderCatalogEntry[]>([])
   const sessions = ref<SessionSummary[]>([])
   const currentSession = ref<SessionSummary>()
   const messages = ref<ChatMessage[]>([])
@@ -19,11 +31,12 @@ export const useAgentStore = defineStore('agent', () => {
   })
 
   async function initialize(): Promise<void> {
-    const [loadedSettings, loadedModels, loadedSessions] = await Promise.all([
-      window.agent.getSettings(), window.agent.listModels(), window.agent.listSessions()
+    const [loadedSettings, loadedModels, loadedCatalog, loadedSessions] = await Promise.all([
+      window.agent.getSettings(), window.agent.listModels(), window.agent.listProviderCatalog(), window.agent.listSessions()
     ])
     settings.value = loadedSettings
     models.value = loadedModels
+    providerCatalog.value = loadedCatalog
     sessions.value = loadedSessions
     window.agent.onAgentEvent(handleEvent)
   }
@@ -48,18 +61,21 @@ export const useAgentStore = defineStore('agent', () => {
     messages.value = snapshot.messages
   }
 
-  async function send(text: string): Promise<void> {
-    if (!currentSession.value) await createSession()
-    if (!currentSession.value) return
+  async function send(text: string): Promise<boolean> {
     error.value = ''
-    running.value = true
-    messages.value.push({ id: crypto.randomUUID(), role: 'user', text, timestamp: new Date().toISOString() })
-    messages.value.push({ id: crypto.randomUUID(), role: 'assistant', text: '', timestamp: new Date().toISOString() })
     try {
+      if (!currentSession.value) await createSession()
+      if (!currentSession.value) return false
+      running.value = true
+      messages.value.push({ id: crypto.randomUUID(), role: 'user', text, timestamp: new Date().toISOString() })
+      messages.value.push({ id: crypto.randomUUID(), role: 'assistant', text: '', timestamp: new Date().toISOString() })
       await window.agent.sendPrompt(currentSession.value.id, text)
+      return true
     } catch (cause) {
       running.value = false
       error.value = errorText(cause)
+      removeTrailingEmptyAssistant()
+      return false
     }
   }
 
@@ -73,10 +89,31 @@ export const useAgentStore = defineStore('agent', () => {
     if (!currentSession.value) return
     await window.agent.cancelRun(currentSession.value.id)
     running.value = false
+    removeTrailingEmptyAssistant()
   }
 
-  async function saveSettings(provider: string, modelId: string, apiKey?: string): Promise<void> {
-    settings.value = await window.agent.saveSettings({ provider, modelId, apiKey })
+  async function saveProvider(draft: ProviderDraft): Promise<void> {
+    settings.value = await window.agent.saveProvider(draft)
+    await refreshProviderData()
+  }
+
+  async function deleteProvider(providerId: string): Promise<void> {
+    settings.value = await window.agent.deleteProvider(providerId)
+    await refreshProviderData()
+  }
+
+  async function testProvider(draft: ProviderDraft): Promise<ConnectionTestResult> {
+    return window.agent.testProvider(draft)
+  }
+
+  async function activateModel(model: ActiveModel): Promise<void> {
+    settings.value = await window.agent.activateModel(model)
+  }
+
+  async function refreshProviderData(): Promise<void> {
+    const [loadedModels, loadedCatalog] = await Promise.all([window.agent.listModels(), window.agent.listProviderCatalog()])
+    models.value = loadedModels
+    providerCatalog.value = loadedCatalog
   }
 
   async function refreshSessions(): Promise<void> {
@@ -100,6 +137,7 @@ export const useAgentStore = defineStore('agent', () => {
     } else if (event.type === 'run-failed') {
       running.value = false
       error.value = event.message
+      removeTrailingEmptyAssistant()
     }
   }
 
@@ -116,9 +154,15 @@ export const useAgentStore = defineStore('agent', () => {
     error.value = ''
   }
 
+  function removeTrailingEmptyAssistant(): void {
+    const last = messages.value.at(-1)
+    if (last?.role === 'assistant' && !last.text) messages.value.pop()
+  }
+
   return {
-    settings, models, sessions, currentSession, messages, approvals, toolEvents, running, error, workspaceName,
-    initialize, chooseWorkspace, createSession, openSession, send, decide, cancel, saveSettings
+    settings, models, providerCatalog, sessions, currentSession, messages, approvals, toolEvents, running, error, workspaceName,
+    initialize, chooseWorkspace, createSession, openSession, send, decide, cancel,
+    saveProvider, deleteProvider, testProvider, activateModel
   }
 })
 

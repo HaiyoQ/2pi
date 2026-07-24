@@ -1,10 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AgentBridge, AgentEvent, ModelConfig } from '../shared/contracts'
+import type { AgentBridge, AgentEvent } from '../shared/contracts'
 import { IPC } from '../shared/contracts'
 
 const bridge: AgentBridge = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
-  saveSettings: (config: ModelConfig) => ipcRenderer.invoke(IPC.saveSettings, config),
+  listProviderCatalog: () => ipcRenderer.invoke(IPC.listProviderCatalog),
+  saveProvider: (draft) => ipcRenderer.invoke(IPC.saveProvider, draft),
+  deleteProvider: (providerId) => ipcRenderer.invoke(IPC.deleteProvider, providerId),
+  testProvider: (draft) => ipcRenderer.invoke(IPC.testProvider, draft),
+  activateModel: (model) => ipcRenderer.invoke(IPC.activateModel, model),
   selectWorkspace: () => ipcRenderer.invoke(IPC.selectWorkspace),
   listModels: () => ipcRenderer.invoke(IPC.listModels),
   listSessions: () => ipcRenderer.invoke(IPC.listSessions),

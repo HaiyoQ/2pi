@@ -1,17 +1,16 @@
 import { dialog, ipcMain, type BrowserWindow } from 'electron'
-import type { ModelConfig } from '../shared/contracts'
 import { IPC } from '../shared/contracts'
 import type { AgentRuntime } from './runtime/agent-runtime'
 import type { SettingsStore } from './runtime/settings-store'
-import { parseModelConfig, requireNonEmpty } from './runtime/validation'
+import { parseActiveModel, parseProviderDraft, requireNonEmpty } from './runtime/validation'
 
 export function registerIpc(window: BrowserWindow, runtime: AgentRuntime, settings: SettingsStore): void {
-  ipcMain.handle(IPC.getSettings, () => settings.get())
-  ipcMain.handle(IPC.saveSettings, async (_event, value: unknown) => {
-    const config: ModelConfig = parseModelConfig(value)
-    await runtime.updateModelKey(config.provider, config.apiKey)
-    return settings.saveModel(config)
-  })
+  ipcMain.handle(IPC.getSettings, () => runtime.getSettings())
+  ipcMain.handle(IPC.listProviderCatalog, () => runtime.listProviderCatalog())
+  ipcMain.handle(IPC.saveProvider, (_event, value: unknown) => runtime.saveProvider(parseProviderDraft(value)))
+  ipcMain.handle(IPC.deleteProvider, (_event, value: unknown) => runtime.deleteProvider(requireNonEmpty(value, '供应商 ID', 200)))
+  ipcMain.handle(IPC.testProvider, (_event, value: unknown) => runtime.testProvider(parseProviderDraft(value)))
+  ipcMain.handle(IPC.activateModel, (_event, value: unknown) => runtime.activateModel(parseActiveModel(value)))
   ipcMain.handle(IPC.selectWorkspace, async () => {
     const result = await dialog.showOpenDialog(window, { title: '选择工作目录', properties: ['openDirectory', 'createDirectory'] })
     if (result.canceled || !result.filePaths[0]) return null

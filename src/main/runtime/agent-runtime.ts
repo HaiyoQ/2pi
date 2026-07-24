@@ -15,14 +15,22 @@ import {
   SessionManager,
   type AgentSession,
   type ExtensionFactory,
+  type ProviderConfig,
   type SessionInfo,
   type ToolCallEvent,
   type ToolDefinition
 } from '@earendil-works/pi-coding-agent'
 import type {
   AgentEvent,
+  ActiveModel,
+  AppSettings,
   ChatMessage,
+  ConnectionTestResult,
   ModelOption,
+  ProviderCatalogEntry,
+  ProviderDraft,
+  ProviderProfile,
+  ProviderProtocol,
   SessionSnapshot,
   SessionSummary,
   ToolApprovalRequest
@@ -31,6 +39,7 @@ import { ApprovalGate } from './approval-gate'
 import { mapSdkEvent } from './event-mapper'
 import { friendlyError } from './validation'
 import type { SettingsStore } from './settings-store'
+import { testProviderConnection } from './provider-discovery'
 import { createPowerShellOperations } from './windows-shell'
 
 const APPROVAL_TOOLS = new Set(['bash', 'edit', 'write'])
@@ -39,6 +48,7 @@ export class AgentRuntime {
   private modelRuntime?: ModelRuntime
   private session?: AgentSession
   private currentRun?: { sessionId: string; runId: string }
+  private catalog: ProviderCatalogEntry[] = []
   private unsubscribe?: () => void
   private readonly listeners = new Set<(event: AgentEvent) => void>()
   private readonly gate = new ApprovalGate((request) => this.emitApproval(request))
@@ -58,9 +68,8 @@ export class AgentRuntime {
       modelsPath: null,
       allowModelNetwork: false
     })
-    const config = this.settings.get()
-    const apiKey = this.settings.getApiKey()
-    if (apiKey) await this.modelRuntime.setRuntimeApiKey(config.model.provider, apiKey)
+    this.catalog = buildCatalog(this.modelRuntime)
+    for (const provider of this.settings.get().providers) await this.registerProvider(provider)
   }
 
   subscribe(listener: (event: AgentEvent) => void): () => void {
@@ -68,16 +77,62 @@ export class AgentRuntime {
     return () => this.listeners.delete(listener)
   }
 
-  async updateModelKey(provider: string, apiKey?: string): Promise<void> {
+  getSettings(): AppSettings {
+    return this.settings.get(this.isBusy())
+  }
+
+  listProviderCatalog(): ProviderCatalogEntry[] {
+    const configured = new Set(this.settings.get().providers.filter((item) => item.type === 'builtin').map((item) => item.id))
+    return this.catalog.filter((item) => !configured.has(item.id)).map((item) => ({
+      ...item, models: item.models.map((model) => ({ ...model }))
+    }))
+  }
+
+  async saveProvider(draft: ProviderDraft): Promise<AppSettings> {
+    this.requireIdle('运行期间不能修改供应商')
+    const previousActive = this.settings.get().activeModel
+    const saved = await this.settings.saveProvider(draft)
+    await this.registerProvider(saved)
+    const active = this.settings.get().activeModel
+    if (active?.providerId === saved.id) await this.applySessionModel(active)
+    else if (previousActive?.providerId === saved.id) this.releaseSession()
+    return this.getSettings()
+  }
+
+  async deleteProvider(providerId: string): Promise<AppSettings> {
+    this.requireIdle('运行期间不能删除供应商')
+    const wasActive = this.settings.get().activeModel?.providerId === providerId
+    await this.settings.deleteProvider(providerId)
     const runtime = this.requireModelRuntime()
-    if (apiKey) await runtime.setRuntimeApiKey(provider, apiKey)
+    runtime.unregisterProvider(providerId)
+    await runtime.removeRuntimeApiKey(providerId)
+    if (wasActive) this.releaseSession()
+    return this.getSettings()
+  }
+
+  async testProvider(draft: ProviderDraft): Promise<ConnectionTestResult> {
+    const existing = draft.id ? this.settings.getProviderSecrets(draft.id) : { headers: {} }
+    const headers = Object.fromEntries(draft.headers.map((item) => [item.name, item.value ?? existing.headers[item.name] ?? '']))
+    return testProviderConnection({
+      protocol: draft.protocol,
+      baseUrl: draft.baseUrl,
+      apiKey: draft.apiKey ?? existing.apiKey,
+      headers
+    })
+  }
+
+  async activateModel(model: ActiveModel): Promise<AppSettings> {
+    this.requireIdle('运行期间不能切换模型')
+    await this.settings.activateModel(model)
+    await this.applySessionModel(model)
+    return this.getSettings()
   }
 
   listModels(): ModelOption[] {
-    return this.requireModelRuntime().getModels().map((model) => ({
-      provider: model.provider,
-      modelId: model.id,
-      label: `${model.name} · ${model.provider}`
+    const runtime = this.requireModelRuntime()
+    return this.settings.get().providers.flatMap((provider) => provider.models.flatMap((configured) => {
+      const model = runtime.getModel(provider.id, configured.id)
+      return model ? [{ providerId: provider.id, modelId: model.id, providerName: provider.name, label: model.name }] : []
     }))
   }
 
@@ -127,8 +182,9 @@ export class AgentRuntime {
 
   private async bindSession(manager: SessionManager): Promise<void> {
     const runtime = this.requireModelRuntime()
-    const config = this.settings.get()
-    const model = runtime.getModel(config.model.provider, config.model.modelId)
+    const active = this.settings.get().activeModel
+    if (!active) throw new Error('请先在模型设置中选择一个模型')
+    const model = runtime.getModel(active.providerId, active.modelId)
     if (!model) throw new Error('找不到所选模型，请在设置中重新选择')
 
     this.unsubscribe?.()
@@ -237,6 +293,83 @@ export class AgentRuntime {
     if (!workspace) throw new Error('请先选择工作目录')
     return workspace
   }
+
+  private async registerProvider(profile: ProviderProfile): Promise<void> {
+    const runtime = this.requireModelRuntime()
+    const secrets = this.settings.getProviderSecrets(profile.id)
+    const config: ProviderConfig = {
+      name: profile.name,
+      baseUrl: profile.baseUrl,
+      apiKey: profile.type === 'custom' && !secrets.apiKey ? 'local-no-key' : undefined,
+      api: toSdkApi(profile.protocol),
+      headers: secrets.headers,
+      authHeader: false,
+      models: profile.models.map((model) => ({
+        id: model.id,
+        name: model.name,
+        reasoning: model.reasoning,
+        input: ['text'],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128_000,
+        maxTokens: 16_000
+      }))
+    }
+    runtime.registerProvider(profile.id, config)
+    if (secrets.apiKey) await runtime.setRuntimeApiKey(profile.id, secrets.apiKey, { allowNetwork: false })
+    else await runtime.removeRuntimeApiKey(profile.id)
+  }
+
+  private async applySessionModel(active: ActiveModel): Promise<void> {
+    if (!this.session) return
+    const model = this.requireModelRuntime().getModel(active.providerId, active.modelId)
+    if (!model) {
+      this.releaseSession()
+      return
+    }
+    await this.session.setModel(model)
+  }
+
+  private isBusy(): boolean {
+    return Boolean(this.currentRun || this.session?.isStreaming)
+  }
+
+  private requireIdle(message: string): void {
+    if (this.isBusy()) throw new Error(message)
+  }
+
+  private releaseSession(): void {
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+    this.session?.dispose()
+    this.session = undefined
+    this.currentRun = undefined
+  }
+}
+
+function toSdkApi(protocol: ProviderProtocol): 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai' {
+  return protocol === 'openai-chat' ? 'openai-completions' : protocol
+}
+
+function buildCatalog(runtime: ModelRuntime): ProviderCatalogEntry[] {
+  return runtime.getProviders().flatMap((provider) => {
+    if (!provider.auth.apiKey?.login) return []
+    const models = provider.getModels()
+    const protocol = models[0] ? fromSdkApi(models[0].api) : undefined
+    if (!protocol || !provider.baseUrl || models.length === 0) return []
+    return [{
+      id: provider.id,
+      name: provider.name,
+      protocol,
+      baseUrl: provider.baseUrl,
+      models: models.map((model) => ({ id: model.id, name: model.name, reasoning: model.reasoning }))
+    }]
+  }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function fromSdkApi(api: string): ProviderProtocol | undefined {
+  if (api === 'openai-completions') return 'openai-chat'
+  if (api === 'openai-responses' || api === 'anthropic-messages' || api === 'google-generative-ai') return api
+  return undefined
 }
 
 function toSummary(info: SessionInfo): SessionSummary {
