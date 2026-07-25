@@ -32,7 +32,7 @@ describe('供应商连接测试与模型发现', () => {
     const result = await testProviderConnection({
       protocol: 'openai-chat', baseUrl, apiKey: 'secret', headers: { 'X-Tenant': 'team-a' }
     })
-    expect(result).toEqual({ ok: true, message: '连接成功，发现 1 个模型', models: [{ id: 'local-model', name: 'local-model', reasoning: false }] })
+    expect(result).toMatchObject({ ok: true, message: '连接成功，发现 1 个模型', models: [{ id: 'local-model', name: 'local-model', reasoning: false, input: ['text'], contextWindow: 128_000, maxTokens: 16_000, toolUse: true }] })
     expect(requestUrl).toBe('/v1/models')
     expect(tenant).toBe('team-a')
   })
@@ -47,17 +47,23 @@ describe('供应商连接测试与模型发现', () => {
   })
 
   it('解析 Anthropic 与 Google 模型列表', () => {
-    expect(parseModelList('anthropic-messages', { data: [{ id: 'claude-sonnet', display_name: 'Claude Sonnet' }] })[0]).toEqual({ id: 'claude-sonnet', name: 'Claude Sonnet', reasoning: false })
-    expect(parseModelList('google-generative-ai', { models: [{ name: 'models/gemini-2.5-pro', displayName: 'Gemini Pro' }] })[0]).toEqual({ id: 'gemini-2.5-pro', name: 'Gemini Pro', reasoning: false })
+    expect(parseModelList('anthropic-messages', { data: [{ id: 'claude-sonnet', display_name: 'Claude Sonnet' }] })[0]).toMatchObject({ id: 'claude-sonnet', name: 'Claude Sonnet', reasoning: false, input: ['text', 'image'] })
+    expect(parseModelList('google-generative-ai', { models: [{ name: 'models/gemini-2.5-pro', displayName: 'Gemini Pro' }] })[0]).toMatchObject({ id: 'gemini-2.5-pro', name: 'Gemini Pro', reasoning: false, input: ['text', 'image'] })
   })
 
   it('将超时和无模型接口转换为可理解错误', async () => {
     const timeoutUrl = await serve(() => undefined)
     const timeout = await testProviderConnection({ protocol: 'openai-chat', baseUrl: timeoutUrl }, 20)
-    expect(timeout).toMatchObject({ ok: false, message: '连接超时，请检查地址或网络' })
+    expect(timeout).toMatchObject({ ok: false, message: '连接超时，请检查地址或网络', failedField: 'baseUrl' })
 
     const missingUrl = await serve((_request, response) => { response.statusCode = 404; response.end() })
     const missing = await testProviderConnection({ protocol: 'openai-chat', baseUrl: missingUrl })
-    expect(missing).toMatchObject({ ok: false, message: '连接成功，但该地址没有模型列表接口；可以手动填写模型 ID' })
+    expect(missing).toMatchObject({ ok: false, message: '连接成功，但该地址没有模型列表接口；可以手动填写模型 ID', failedField: 'baseUrl' })
+  })
+
+  it('将认证错误归因到 API Key 字段', async () => {
+    const baseUrl = await serve((_request, response) => { response.statusCode = 401; response.end() })
+    const result = await testProviderConnection({ protocol: 'openai-chat', baseUrl, apiKey: 'invalid' })
+    expect(result).toMatchObject({ ok: false, message: '认证失败，请检查 API Key 和请求头', failedField: 'apiKey' })
   })
 })

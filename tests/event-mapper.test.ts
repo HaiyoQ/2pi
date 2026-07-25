@@ -17,13 +17,31 @@ describe('mapSdkEvent', () => {
     expect(mapSdkEvent(event, 's1', 'r1')).toMatchObject({ type: 'tool-complete', toolCallId: 't1', isError: false })
   })
 
-  it('将模型认证异常转换为可理解的失败事件', () => {
+  it('为文件修改工具保留目标路径用于关联实际 diff', () => {
+    const event = { type: 'tool_execution_start', toolCallId: 't2', toolName: 'edit', args: { path: 'src/main/ipc.ts' } } as AgentSessionEvent
+    expect(mapSdkEvent(event, 's1', 'r1')).toMatchObject({ type: 'tool-progress', targetPath: 'src/main/ipc.ts' })
+  })
+
+  it('只映射 thinking 生命周期，不转发原始内容', () => {
+    const event = {
+      type: 'message_update',
+      message: {},
+      assistantMessageEvent: { type: 'thinking_start', contentIndex: 0, partial: { content: [{ type: 'thinking', thinking: '秘密推理' }] } }
+    } as AgentSessionEvent
+    const mapped = mapSdkEvent(event, 's1', 'r1')
+    expect(mapped).toMatchObject({ type: 'thinking-status', sessionId: 's1', runId: 'r1', status: 'running' })
+    expect(JSON.stringify(mapped)).not.toContain('秘密推理')
+  })
+
+  it('转换用量并附带上下文占用', () => {
     const event = {
       type: 'message_end',
-      message: { role: 'assistant', stopReason: 'error', errorMessage: '401 unauthorized api key' }
+      message: { role: 'assistant', usage: { input: 12, output: 8, cacheRead: 2, cacheWrite: 1, totalTokens: 23 } }
     } as AgentSessionEvent
-    expect(mapSdkEvent(event, 's1', 'r1')).toEqual({
-      type: 'run-failed', sessionId: 's1', runId: 'r1', message: 'API Key 无效或未配置，请在设置中检查。'
+    expect(mapSdkEvent(event, 's1', 'r1', { tokens: 50, contextWindow: 100, percent: 50 })).toEqual({
+      type: 'usage-delta', sessionId: 's1', runId: 'r1',
+      usage: { input: 12, output: 8, cacheRead: 2, cacheWrite: 1, total: 23 },
+      context: { tokens: 50, contextWindow: 100, percent: 50 }
     })
   })
 })

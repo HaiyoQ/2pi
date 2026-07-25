@@ -1,5 +1,5 @@
 ---
-name: "2pi Codex Desktop Reference"
+name: "LOOP Codex Desktop Reference"
 description: "A restrained desktop coding workspace modeled on the Codex app interaction grammar."
 colors:
   canvas: "#ffffff"
@@ -116,11 +116,11 @@ components:
     padding: "10px"
 ---
 
-# Design System: 2pi Codex Desktop Reference
+# Design System: LOOP Codex Desktop Reference
 
 ## Overview
 
-**Creative North Star: "Codex, translated for 2pi"**
+**Creative North Star: "Codex, translated for LOOP"**
 
 This direction deliberately follows the Codex desktop app's quiet operating grammar: neutral layered surfaces, compact controls, an unframed transcript, semantic tool glyphs, and progressive disclosure for technical detail. It replaces the previous dark branded sidebar, colored tool cards, decorative shadows, and custom visual flourishes.
 
@@ -157,6 +157,7 @@ Navigation and small buttons use 6px corners, temporary surfaces use 10px, and t
 
 ## Components
 
+- **Brand:** the “A / 回环” mark from `2pi-logo-options.html` is used as the composer send control and rotates on the red stop state while a task is running. The sidebar starts directly with task controls and does not repeat a logo or wordmark.
 - **Tool chain:** one semantic Lucide glyph per operation, a continuous 1px connector, one-line summaries at rest, and nested details on disclosure.
 - **Composer:** unframed textarea above a compact contract row containing project, model, reasoning and execution mode.
 - **History:** searchable, project-grouped rows with rename, pin and archive actions exposed on hover or keyboard focus.

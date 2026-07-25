@@ -20,9 +20,11 @@ export async function testProviderConnection(
       headers: requestHeaders(config),
       signal: controller.signal
     })
-    if (!response.ok) return { ok: false, message: statusMessage(response.status), models: [] }
+    if (!response.ok) return { ok: false, ...statusResult(response.status), models: [] }
     let payload: unknown
-    try { payload = await response.json() } catch { return { ok: false, message: '服务返回了无法解析的模型列表', models: [] } }
+    try { payload = await response.json() } catch {
+      return { ok: false, message: '服务返回了无法解析的模型列表', models: [], failedField: 'baseUrl' }
+    }
     const models = parseModelList(config.protocol, payload)
     return {
       ok: true,
@@ -30,9 +32,9 @@ export async function testProviderConnection(
       models
     }
   } catch (error) {
-    if (controller.signal.aborted) return { ok: false, message: '连接超时，请检查地址或网络', models: [] }
+    if (controller.signal.aborted) return { ok: false, message: '连接超时，请检查地址或网络', models: [], failedField: 'baseUrl' }
     const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, message: `连接失败：${safeMessage(message)}`, models: [] }
+    return { ok: false, message: `连接失败：${safeMessage(message)}`, models: [], failedField: 'baseUrl' }
   } finally {
     clearTimeout(timeout)
   }
@@ -74,16 +76,43 @@ export function parseModelList(protocol: ProviderProtocol, value: unknown): Prov
     const name = typeof model.displayName === 'string' ? model.displayName
       : typeof model.display_name === 'string' ? model.display_name
         : id
-    result.set(id, { id, name, reasoning: /reason|thinking|o[134](?:-|$)/i.test(id) })
+    result.set(id, {
+      id,
+      name,
+      reasoning: /reason|thinking|o[134](?:-|$)/i.test(id),
+      input: inferredInput(protocol, id, model),
+      contextWindow: inferredLimit(model.context_window ?? model.contextWindow ?? model.inputTokenLimit, 128_000),
+      maxTokens: inferredLimit(model.max_output_tokens ?? model.maxTokens ?? model.outputTokenLimit, 16_000),
+      toolUse: true
+    })
   }
   return [...result.values()]
 }
 
-function statusMessage(status: number): string {
-  if (status === 401 || status === 403) return '认证失败，请检查 API Key 和请求头'
-  if (status === 404) return '连接成功，但该地址没有模型列表接口；可以手动填写模型 ID'
-  if (status === 429) return '请求过于频繁，请稍后重试'
-  return `模型服务返回 HTTP ${status}`
+function inferredInput(protocol: ProviderProtocol, id: string, model: Record<string, unknown>): ('text' | 'image')[] {
+  const capabilities = model.capabilities
+  const acceptsImage = Array.isArray(model.input_modalities) && model.input_modalities.includes('image')
+    || Array.isArray(model.supportedGenerationMethods) && model.supportedGenerationMethods.some((item) => item === 'generateContent')
+    || Boolean(capabilities && typeof capabilities === 'object' && (capabilities as Record<string, unknown>).vision)
+    || protocol === 'google-generative-ai'
+    || /gpt-4(?:o|\.1)|gpt-5|vision|claude|gemini|qwen.*vl|llava/i.test(id)
+  return acceptsImage ? ['text', 'image'] : ['text']
+}
+
+function inferredLimit(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 10_000_000) return value
+  return fallback
+}
+
+function statusResult(status: number): Pick<ConnectionTestResult, 'message' | 'failedField'> {
+  if (status === 401 || status === 403) {
+    return { message: '认证失败，请检查 API Key 和请求头', failedField: 'apiKey' }
+  }
+  if (status === 404) {
+    return { message: '连接成功，但该地址没有模型列表接口；可以手动填写模型 ID', failedField: 'baseUrl' }
+  }
+  if (status === 429) return { message: '请求过于频繁，请稍后重试' }
+  return { message: `模型服务返回 HTTP ${status}` }
 }
 
 function safeMessage(message: string): string {

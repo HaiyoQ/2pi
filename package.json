@@ -36,7 +36,7 @@
   },
   "build": {
     "appId": "cn.2pi.agent",
-    "productName": "2pi",
+    "productName": "LOOP",
     "directories": {
       "output": "release"
     },

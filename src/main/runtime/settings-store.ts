@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { AGENT_TOOL_NAMES } from '../../shared/contracts'
 import type {
   ActiveModel,
+  AgentPreferences,
+  AgentToolName,
   AppSettings,
   ProviderDraft,
   ProviderHeader,
@@ -29,6 +32,15 @@ interface SettingsFileV2 {
   workspacePath: string
 }
 
+interface SettingsFileV3 {
+  version: 3
+  providers: StoredProvider[]
+  activeModel?: ActiveModel
+  workspacePath: string
+  agent: AgentPreferences
+  agentConfirmed: boolean
+}
+
 interface LegacySettingsFile {
   provider?: unknown
   modelId?: unknown
@@ -36,7 +48,13 @@ interface LegacySettingsFile {
   encryptedApiKey?: unknown
 }
 
-const defaults: SettingsFileV2 = { version: 2, providers: [], workspacePath: '' }
+const defaultAgentPreferences: AgentPreferences = {
+  executionMode: 'full-auto',
+  thinkingLevel: 'medium',
+  autoRetry: true,
+  enabledTools: [...AGENT_TOOL_NAMES]
+}
+const defaults: SettingsFileV3 = { version: 3, providers: [], workspacePath: '', agent: defaultAgentPreferences, agentConfirmed: true }
 
 export interface SecretCodec {
   encrypt(value: string): string
@@ -49,15 +67,19 @@ export interface ProviderSecrets {
 }
 
 export class SettingsStore {
-  private value: SettingsFileV2 = structuredClone(defaults)
+  private value: SettingsFileV3 = structuredClone(defaults)
 
   constructor(private readonly filePath: string, private readonly codec: SecretCodec) {}
 
   async load(): Promise<void> {
     try {
       const parsed = JSON.parse(await readFile(this.filePath, 'utf8')) as unknown
-      this.value = isV2(parsed) ? normalizeV2(parsed) : migrateLegacy(parsed)
-      if (!isV2(parsed)) await this.flush()
+      this.value = isV3(parsed)
+        ? normalizeV3(parsed)
+        : isV2(parsed)
+          ? migrateV2(parsed)
+          : migrateLegacy(parsed)
+      if (!isV3(parsed)) await this.flush()
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
@@ -65,10 +87,12 @@ export class SettingsStore {
 
   get(runtimeBusy = false): AppSettings {
     return {
-      version: 2,
+      version: 3,
       providers: this.value.providers.map(toProfile),
       activeModel: this.value.activeModel ? { ...this.value.activeModel } : undefined,
       workspace: { path: this.value.workspacePath },
+      agent: cloneAgentPreferences(this.value.agent),
+      agentNeedsConfirmation: !this.value.agentConfirmed,
       runtimeBusy
     }
   }
@@ -81,11 +105,23 @@ export class SettingsStore {
   getProviderSecrets(providerId: string): ProviderSecrets {
     const provider = this.value.providers.find((item) => item.id === providerId)
     if (!provider) return { headers: {} }
-    return {
-      apiKey: provider.encryptedApiKey ? this.codec.decrypt(provider.encryptedApiKey) : undefined,
-      headers: provider.encryptedHeaders
+    let apiKey: string | undefined
+    let headers: Record<string, string> = {}
+    try {
+      apiKey = provider.encryptedApiKey ? this.codec.decrypt(provider.encryptedApiKey) : undefined
+    } catch {
+      apiKey = undefined
+    }
+    try {
+      headers = provider.encryptedHeaders
         ? JSON.parse(this.codec.decrypt(provider.encryptedHeaders)) as Record<string, string>
         : {}
+    } catch {
+      headers = {}
+    }
+    return {
+      apiKey,
+      headers
     }
   }
 
@@ -136,9 +172,25 @@ export class SettingsStore {
     return this.get()
   }
 
-  async saveWorkspace(workspacePath: string): Promise<AppSettings> {
-    this.value.workspacePath = workspacePath
+  async saveAgentPreferences(preferences: AgentPreferences): Promise<AppSettings> {
+    const next = normalizeAgentPreferences(preferences, defaultAgentPreferences)
+    if (JSON.stringify(next) === JSON.stringify(this.value.agent) && this.value.agentConfirmed) return this.get()
+    this.value.agent = next
+    this.value.agentConfirmed = true
     await this.flush()
+    return this.get()
+  }
+
+  async saveWorkspace(workspacePath: string): Promise<AppSettings> {
+    if (this.value.workspacePath === workspacePath) return this.get()
+    const previous = this.value.workspacePath
+    this.value.workspacePath = workspacePath
+    try {
+      await this.flush()
+    } catch (error) {
+      this.value.workspacePath = previous
+      throw error
+    }
     return this.get()
   }
 
@@ -162,28 +214,50 @@ function toProfile(provider: StoredProvider): ProviderProfile {
   }
 }
 
+function isV3(value: unknown): value is SettingsFileV3 {
+  return Boolean(value && typeof value === 'object' && (value as { version?: unknown }).version === 3)
+}
+
 function isV2(value: unknown): value is SettingsFileV2 {
   return Boolean(value && typeof value === 'object' && (value as { version?: unknown }).version === 2)
 }
 
-function normalizeV2(value: SettingsFileV2): SettingsFileV2 {
+function normalizeV3(value: SettingsFileV3): SettingsFileV3 {
   return {
-    version: 2,
+    version: 3,
     workspacePath: typeof value.workspacePath === 'string' ? value.workspacePath : '',
     activeModel: validActiveModel(value.activeModel) ? { ...value.activeModel } : undefined,
     providers: Array.isArray(value.providers) ? value.providers.filter(validStoredProvider).map((provider) => ({
       ...provider,
-      models: provider.models.map((model) => ({ ...model })),
+      models: provider.models.map(normalizeModel),
       headerNames: [...provider.headerNames]
-    })) : []
+    })) : [],
+    agent: normalizeAgentPreferences(value.agent, defaultAgentPreferences),
+    agentConfirmed: typeof value.agentConfirmed === 'boolean' ? value.agentConfirmed : true
   }
 }
 
-function migrateLegacy(value: unknown): SettingsFileV2 {
+function migrateV2(value: SettingsFileV2): SettingsFileV3 {
+  return {
+    version: 3,
+    workspacePath: typeof value.workspacePath === 'string' ? value.workspacePath : '',
+    activeModel: validActiveModel(value.activeModel) ? { ...value.activeModel } : undefined,
+    providers: Array.isArray(value.providers) ? value.providers.filter(validStoredProvider).map((provider) => ({
+      ...provider,
+      models: provider.models.map(normalizeModel),
+      headerNames: [...provider.headerNames]
+    })) : [],
+    agent: { ...structuredClone(defaultAgentPreferences), executionMode: 'read-only' },
+    agentConfirmed: false
+  }
+}
+
+function migrateLegacy(value: unknown): SettingsFileV3 {
   const legacy = value && typeof value === 'object' ? value as LegacySettingsFile : {}
   const providerId = typeof legacy.provider === 'string' && legacy.provider.trim() ? legacy.provider.trim() : undefined
   const modelId = typeof legacy.modelId === 'string' && legacy.modelId.trim() ? legacy.modelId.trim() : undefined
-  if (!providerId || !modelId) return { ...defaults, workspacePath: typeof legacy.workspacePath === 'string' ? legacy.workspacePath : '' }
+  const migratedAgent = { ...structuredClone(defaultAgentPreferences), executionMode: 'read-only' as const }
+  if (!providerId || !modelId) return { ...structuredClone(defaults), workspacePath: typeof legacy.workspacePath === 'string' ? legacy.workspacePath : '', agent: migratedAgent, agentConfirmed: false }
   const provider: StoredProvider = {
     id: providerId,
     type: 'builtin',
@@ -195,11 +269,41 @@ function migrateLegacy(value: unknown): SettingsFileV2 {
     headerNames: []
   }
   return {
-    version: 2,
+    version: 3,
     providers: [provider],
     activeModel: { providerId, modelId },
-    workspacePath: typeof legacy.workspacePath === 'string' ? legacy.workspacePath : ''
+    workspacePath: typeof legacy.workspacePath === 'string' ? legacy.workspacePath : '',
+    agent: migratedAgent,
+    agentConfirmed: false
   }
+}
+
+function normalizeAgentPreferences(value: unknown, fallback: AgentPreferences): AgentPreferences {
+  const candidate = value && typeof value === 'object' ? value as Partial<AgentPreferences> : {}
+  const enabledTools = Array.isArray(candidate.enabledTools)
+    ? [...new Set(candidate.enabledTools.filter(isAgentToolName))]
+    : [...fallback.enabledTools]
+  return {
+    executionMode: candidate.executionMode === 'read-only' || candidate.executionMode === 'full-auto'
+      ? candidate.executionMode
+      : fallback.executionMode,
+    thinkingLevel: isThinkingLevel(candidate.thinkingLevel) ? candidate.thinkingLevel : fallback.thinkingLevel,
+    autoRetry: typeof candidate.autoRetry === 'boolean' ? candidate.autoRetry : fallback.autoRetry,
+    enabledTools
+  }
+}
+
+function cloneAgentPreferences(value: AgentPreferences): AgentPreferences {
+  return { ...value, enabledTools: [...value.enabledTools] }
+}
+
+function isAgentToolName(value: unknown): value is AgentToolName {
+  return typeof value === 'string' && (AGENT_TOOL_NAMES as readonly string[]).includes(value)
+}
+
+function isThinkingLevel(value: unknown): value is AgentPreferences['thinkingLevel'] {
+  return value === 'minimal' || value === 'low' || value === 'medium'
+    || value === 'high' || value === 'xhigh' || value === 'max'
 }
 
 function validActiveModel(value: unknown): value is ActiveModel {
@@ -214,6 +318,23 @@ function validStoredProvider(value: unknown): value is StoredProvider {
   return typeof item.id === 'string' && (item.type === 'builtin' || item.type === 'custom')
     && typeof item.name === 'string' && isProtocol(item.protocol) && typeof item.baseUrl === 'string'
     && Array.isArray(item.models) && Array.isArray(item.headerNames)
+}
+
+function normalizeModel(model: ProviderProfile['models'][number]): ProviderProfile['models'][number] {
+  const input = Array.isArray(model.input) && model.input.length
+    ? [...new Set(model.input.filter((item): item is 'text' | 'image' => item === 'text' || item === 'image'))]
+    : ['text']
+  return {
+    ...model,
+    input: (input.includes('text') ? input : ['text']) as ('text' | 'image')[],
+    contextWindow: validLimit(model.contextWindow, 128_000),
+    maxTokens: validLimit(model.maxTokens, 16_000),
+    toolUse: model.toolUse !== false
+  }
+}
+
+function validLimit(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 10_000_000 ? value : fallback
 }
 
 function isProtocol(value: unknown): value is ProviderProtocol {
