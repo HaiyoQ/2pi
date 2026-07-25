@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>2pi 图标选型 · 第二轮</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f5f6f4;
+        --surface: #fdfdfb;
+        --preview: #eceeeb;
+        --ink: #171817;
+        --muted: #71736e;
+        --line: #dcded9;
+        --line-strong: #b9bcb5;
+        --focus: #315f8f;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        background: var(--canvas);
+        color: var(--ink);
+        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+      }
+
+      button { color: inherit; font: inherit; }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 54px 0 48px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(250px, 360px);
+        gap: 40px;
+        align-items: end;
+        padding: 0 2px 28px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .kicker {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 36px;
+        font-weight: 610;
+        letter-spacing: -0.03em;
+        line-height: 1.12;
+      }
+
+      .brief {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      .options {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .option {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--surface);
+        text-align: left;
+        transition: transform 180ms var(--ease), border-color 180ms var(--ease), box-shadow 180ms var(--ease);
+      }
+
+      .option:hover {
+        transform: translateY(-3px);
+        border-color: var(--line-strong);
+        box-shadow: 0 14px 30px rgba(22, 24, 21, 0.07);
+      }
+
+      .option:focus-visible {
+        outline: 3px solid rgba(49, 95, 143, 0.25);
+        outline-offset: 3px;
+      }
+
+      .option.selected {
+        border-color: var(--ink);
+        box-shadow: 0 0 0 1px var(--ink), 0 14px 30px rgba(22, 24, 21, 0.09);
+      }
+
+      .option-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 30px;
+        padding: 0 4px 8px;
+      }
+
+      .code {
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .picked {
+        color: var(--focus);
+        font-size: 10px;
+        font-weight: 650;
+        opacity: 0;
+      }
+
+      .option.selected .picked { opacity: 1; }
+
+      .hero {
+        display: grid;
+        min-height: 182px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--preview);
+      }
+
+      .hero svg {
+        width: 118px;
+        height: 118px;
+      }
+
+      .option h2 {
+        margin: 14px 4px 3px;
+        font-size: 14px;
+        font-weight: 680;
+        letter-spacing: 0;
+      }
+
+      .option p {
+        min-height: 44px;
+        margin: 0 4px 11px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+
+      .contexts {
+        display: grid;
+        grid-template-columns: repeat(3, 36px);
+        gap: 7px;
+        margin: auto 4px 2px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+
+      .context {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--ink);
+      }
+
+      .context.dark { border-color: #292b29; background: #202220; color: #fff; }
+      .context.bare { border-color: transparent; background: transparent; }
+      .context svg { width: 21px; height: 21px; }
+      .context.bare svg { width: 16px; height: 16px; }
+
+      .selection {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 24px;
+        padding: 15px 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(253, 253, 251, 0.78);
+      }
+
+      .selection strong { display: block; font-size: 12px; font-weight: 650; }
+      .selection span { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+      .selection button {
+        min-height: 32px;
+        flex: 0 0 auto;
+        padding: 0 12px;
+        border: 1px solid var(--ink);
+        border-radius: 6px;
+        background: var(--ink);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      @media (max-width: 940px) {
+        .options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      }
+
+      @media (max-width: 640px) {
+        .page { width: min(100% - 24px, 430px); padding-top: 30px; }
+        header { display: block; padding-bottom: 22px; }
+        h1 { font-size: 28px; }
+        .brief { margin-top: 12px; }
+        .options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+        .hero { min-height: 140px; }
+        .hero svg { width: 98px; height: 98px; }
+        .option p { min-height: 50px; }
+        .selection { align-items: stretch; flex-direction: column; gap: 11px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+      <defs>
+        <symbol id="icon-loop" viewBox="0 0 120 120">
+          <path d="M28 45C34 25 55 16 75 23c22 7 34 31 26 52-8 22-32 33-54 25-18-7-29-25-25-43" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="8" />
+          <path d="M44 62c0-11 9-20 20-20s20 9 20 20-9 20-20 20c-8 0-15-5-18-12" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="8" />
+          <circle cx="25" cy="48" r="5" fill="currentColor" />
+        </symbol>
+
+        <symbol id="icon-fold" viewBox="0 0 120 120">
+          <path fill="currentColor" d="M23 22h49c16 0 26 9 26 23 0 10-5 17-16 23L54 85h45v15H21V83l52-29c7-4 10-7 10-11 0-4-4-7-11-7H23z" />
+        </symbol>
+
+        <symbol id="icon-core" viewBox="0 0 120 120">
+          <path d="M46 25H34c-8 0-14 6-14 14v42c0 8 6 14 14 14h12M74 25h12c8 0 14 6 14 14v42c0 8-6 14-14 14H74" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="8" />
+          <rect x="49" y="49" width="22" height="22" rx="6" fill="currentColor" transform="rotate(45 60 60)" />
+        </symbol>
+
+        <symbol id="icon-twin" viewBox="0 0 120 120">
+          <rect x="21" y="20" width="31" height="80" rx="15.5" fill="none" stroke="currentColor" stroke-width="8" />
+          <rect x="68" y="20" width="31" height="80" rx="15.5" fill="none" stroke="currentColor" stroke-width="8" />
+          <path d="M48 60h24" stroke="currentColor" stroke-linecap="round" stroke-width="8" />
+        </symbol>
+
+        <symbol id="icon-trace" viewBox="0 0 120 120">
+          <path d="M34 30h25c14 0 25 11 25 25S73 80 59 80H45c-8 0-14 6-14 14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="8" />
+          <rect x="21" y="20" width="20" height="20" rx="6" fill="currentColor" />
+          <rect x="74" y="45" width="20" height="20" rx="6" fill="currentColor" />
+          <rect x="21" y="84" width="20" height="20" rx="6" fill="currentColor" />
+        </symbol>
+      </defs>
+    </svg>
+
+    <main class="page">
+      <header>
+        <div>
+          <p class="kicker">2pi · Icon study 02</p>
+          <h1>五个全新图标方向</h1>
+        </div>
+        <p class="brief">不再使用 pi.dev 图形，也不要求图标直接拼出“2pi”。每个方向都能独立作为桌面图标、侧栏标记和托盘图标。</p>
+      </header>
+
+      <section class="options" aria-label="2pi 图标候选">
+        <button class="option" type="button" data-choice="A">
+          <span class="option-head"><span class="code">A / 回环</span><span class="picked">已选</span></span>
+          <span class="hero"><svg viewBox="0 0 120 120" aria-label="回环图标"><use href="#icon-loop" /></svg></span>
+          <h2>Agent Loop</h2>
+          <p>连续运行、复核与重试。轮廓柔和，动态潜力最好。</p>
+          <span class="contexts" aria-hidden="true"><span class="context"><svg><use href="#icon-loop" /></svg></span><span class="context dark"><svg><use href="#icon-loop" /></svg></span><span class="context bare"><svg><use href="#icon-loop" /></svg></span></span>
+        </button>
+
+        <button class="option" type="button" data-choice="B">
+          <span class="option-head"><span class="code">B / 折带</span><span class="picked">已选</span></span>
+          <span class="hero"><svg viewBox="0 0 120 120" aria-label="折带图标"><use href="#icon-fold" /></svg></span>
+          <h2>Folded Two</h2>
+          <p>抽象数字 2，单一实心轮廓，品牌记忆最直接。</p>
+          <span class="contexts" aria-hidden="true"><span class="context"><svg><use href="#icon-fold" /></svg></span><span class="context dark"><svg><use href="#icon-fold" /></svg></span><span class="context bare"><svg><use href="#icon-fold" /></svg></span></span>
+        </button>
+
+        <button class="option" type="button" data-choice="C">
+          <span class="option-head"><span class="code">C / 内核</span><span class="picked">已选</span></span>
+          <span class="hero"><svg viewBox="0 0 120 120" aria-label="内核图标"><use href="#icon-core" /></svg></span>
+          <h2>Context Core</h2>
+          <p>代码边界围住 Agent 核心，安静、精确、工具属性强。</p>
+          <span class="contexts" aria-hidden="true"><span class="context"><svg><use href="#icon-core" /></svg></span><span class="context dark"><svg><use href="#icon-core" /></svg></span><span class="context bare"><svg><use href="#icon-core" /></svg></span></span>
+        </button>
+
+        <button class="option" type="button" data-choice="D">
+          <span class="option-head"><span class="code">D / 双核</span><span class="picked">已选</span></span>
+          <span class="hero"><svg viewBox="0 0 120 120" aria-label="双核图标"><use href="#icon-twin" /></svg></span>
+          <h2>Dual Process</h2>
+          <p>两个并行单元由任务通道连接，结构稳定、对称克制。</p>
+          <span class="contexts" aria-hidden="true"><span class="context"><svg><use href="#icon-twin" /></svg></span><span class="context dark"><svg><use href="#icon-twin" /></svg></span><span class="context bare"><svg><use href="#icon-twin" /></svg></span></span>
+        </button>
+
+        <button class="option" type="button" data-choice="E">
+          <span class="option-head"><span class="code">E / 路径</span><span class="picked">已选</span></span>
+          <span class="hero"><svg viewBox="0 0 120 120" aria-label="路径图标"><use href="#icon-trace" /></svg></span>
+          <h2>Tool Trace</h2>
+          <p>任务在工具节点间流动，最贴近编程 Agent 的运行过程。</p>
+          <span class="contexts" aria-hidden="true"><span class="context"><svg><use href="#icon-trace" /></svg></span><span class="context dark"><svg><use href="#icon-trace" /></svg></span><span class="context bare"><svg><use href="#icon-trace" /></svg></span></span>
+        </button>
+      </section>
+
+      <section class="selection" aria-live="polite">
+        <div><strong id="selection-title">尚未选择</strong><span id="selection-copy">点击任意卡片查看选中状态。</span></div>
+        <button id="clear" type="button">清除选择</button>
+      </section>
+    </main>
+
+    <script>
+      const options = [...document.querySelectorAll(".option")];
+      const title = document.querySelector("#selection-title");
+      const copy = document.querySelector("#selection-copy");
+
+      function select(option) {
+        options.forEach((item) => item.classList.toggle("selected", item === option));
+        title.textContent = option ? `已选择 ${option.dataset.choice} / ${option.querySelector("h2").textContent}` : "尚未选择";
+        copy.textContent = option ? "这个方向将用于下一轮主原型品牌替换。" : "点击任意卡片查看选中状态。";
+      }
+
+      options.forEach((option) => option.addEventListener("click", () => select(option)));
+      document.querySelector("#clear").addEventListener("click", () => select(null));
+    </script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+  <style>
+    .logo-mark { fill: none; stroke: #000; }
+    @media (prefers-color-scheme: dark) {
+      .logo-mark { stroke: #fff; }
+    }
+  </style>
+  <path
+    class="logo-mark"
+    d="M223.97 223.97 H576.04 V400 H223.97 V576.04 H576.04"
+    stroke-width="117.36"
+    stroke-linecap="square"
+    stroke-linejoin="miter"
+  />
+</svg>

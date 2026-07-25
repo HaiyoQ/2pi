@@ -1,0 +1,3289 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>2pi · Codex 0.145.0 桌面体验原型</title>
+    <!--
+PROTOTYPE ONLY: 独立视觉示例，不使用持久化或 IPC。
+THESIS: 2pi 使用 Codex 桌面端的项目、记录、工具调用链和 Diff 审阅语法。
+OWN-WORLD: 原生系统字体、白色画布、暖灰导航、发丝分隔线、只用于状态的颜色。
+STORY: 选择项目、发起任务、检查可收放工具链、审阅 Diff、从历史继续。
+FIRST VIEWPORT: 248px 侧栏、720px 任务正文、常驻输入区，Diff 按需从右侧展开。
+FORM: 用户指定的 Codex 桌面方向；0.145.0 公共发布物可验证行为，但未公开桌面 UI 源码。
+-->
+    <style>
+      :root {
+        color-scheme: light;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei UI", sans-serif;
+        letter-spacing: 0;
+        --bg: #fff;
+        --side: #f7f7f5;
+        --soft: #f1f1ee;
+        --selected: #e9e9e5;
+        --ink: #20201e;
+        --ink2: #52524f;
+        --muted: #73736e;
+        --line: #e6e6e2;
+        --line2: #d2d2cd;
+        --green: #16865c;
+        --greenbg: #e9f6ee;
+        --red: #c9473d;
+        --redbg: #fceceb;
+        --amber: #9a6a12;
+        --amberbg: #fbf2dc;
+        --blue: #3373c4;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --sidew: 248px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        min-width: 700px;
+        height: 100%;
+        min-height: 560px;
+        margin: 0;
+        overflow: hidden;
+      }
+      body {
+        color: var(--ink);
+        background: #efefec;
+        -webkit-font-smoothing: antialiased;
+      }
+      button,
+      input,
+      textarea,
+      select {
+        font: inherit;
+        letter-spacing: 0;
+      }
+      button {
+        color: inherit;
+        cursor: pointer;
+      }
+      .icon {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .icon.sm {
+        width: 14px;
+        height: 14px;
+      }
+      .mono {
+        font-family: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+      }
+      :focus-visible {
+        outline: 2px solid #3b78c6;
+        outline-offset: 2px;
+      }
+      .app {
+        display: grid;
+        grid-template-columns: var(--sidew) minmax(0, 1fr);
+        width: 100%;
+        height: 100%;
+        background: var(--bg);
+      }
+      .sidebar {
+        position: relative;
+        z-index: 5;
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        overflow: hidden;
+        border-right: 1px solid var(--line);
+        background: var(--side);
+      }
+      .side-head {
+        display: flex;
+        min-height: 53px;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 10px 5px 14px;
+      }
+      .brand {
+        display: flex;
+        min-width: 0;
+        flex: 1;
+        align-items: center;
+        gap: 9px;
+        border: 0;
+        background: transparent;
+        text-align: left;
+      }
+      .brand-mark {
+        display: inline-flex;
+        width: 26px;
+        height: 26px;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        border: 1px solid #cbc9c2;
+        border-radius: 7px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(20, 20, 17, 0.05);
+      }
+      .brand-glyph {
+        width: 14px;
+        height: 14px;
+        filter: brightness(0);
+        object-fit: contain;
+      }
+      .pi-glyph {
+        margin-left: -2px;
+      }
+      .icon-btn {
+        display: inline-grid;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+      }
+      .icon-btn:hover {
+        background: #e9e9e5;
+      }
+      .icon-btn.danger:hover {
+        color: var(--red);
+        background: var(--redbg);
+      }
+      .side-actions {
+        display: grid;
+        gap: 2px;
+        padding: 4px 8px 8px;
+      }
+      .nav-btn {
+        display: flex;
+        width: 100%;
+        height: 34px;
+        align-items: center;
+        gap: 10px;
+        padding: 0 9px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        font-size: 12px;
+        text-align: left;
+      }
+      .nav-btn:hover {
+        background: #ecece8;
+      }
+      .nav-btn.primary {
+        color: #fff;
+        background: var(--ink);
+      }
+      .nav-btn.primary:hover {
+        background: #343431;
+      }
+      .side-scroll {
+        min-height: 0;
+        flex: 1;
+        overflow: auto;
+        padding: 4px 8px 16px;
+        scrollbar-width: thin;
+      }
+      .side-label {
+        display: flex;
+        height: 28px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 9px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 550;
+      }
+      .side-label button {
+        border: 0;
+        background: transparent;
+        color: inherit;
+      }
+      .project-head {
+        display: grid;
+        width: 100%;
+        min-height: 33px;
+        grid-template-columns: 18px minmax(0, 1fr) 20px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 7px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        text-align: left;
+      }
+      .project-head:hover {
+        background: #ecece8;
+      }
+      .project-head strong {
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .project-head .chev {
+        transition: transform 160ms var(--ease);
+      }
+      .project.open .project-head .chev {
+        transform: rotate(180deg);
+      }
+      .threads {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 180ms var(--ease);
+      }
+      .project.open .threads {
+        grid-template-rows: 1fr;
+      }
+      .threads-inner {
+        min-height: 0;
+        overflow: hidden;
+      }
+      .thread {
+        display: grid;
+        width: 100%;
+        min-height: 44px;
+        grid-template-columns: minmax(0, 1fr) 24px;
+        align-items: center;
+        margin: 1px 0;
+        padding: 5px 4px 5px 27px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        text-align: left;
+      }
+      .thread:hover,
+      .thread.active {
+        background: var(--selected);
+      }
+      .thread strong,
+      .thread small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .thread strong {
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .thread small {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .thread .more {
+        visibility: hidden;
+        opacity: 0;
+      }
+      .thread:hover .more,
+      .thread:focus-within .more {
+        visibility: visible;
+        opacity: 1;
+      }
+      .side-foot {
+        display: grid;
+        gap: 2px;
+        padding: 7px 8px 10px;
+        border-top: 1px solid var(--line);
+      }
+      .avatar {
+        display: grid;
+        width: 20px;
+        height: 20px;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: #444440;
+        font-size: 9px;
+      }
+      .workspace {
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-rows: 52px minmax(0, 1fr);
+        overflow: hidden;
+      }
+      .topbar {
+        position: relative;
+        z-index: 3;
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        padding: 0 13px 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.97);
+      }
+      .title {
+        min-width: 0;
+        flex: 1;
+      }
+      .title strong,
+      .title small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .title strong {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .title small {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+      .text-btn {
+        display: inline-flex;
+        height: 30px;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .text-btn:hover {
+        background: var(--soft);
+      }
+      .host {
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr);
+        overflow: hidden;
+        transition: grid-template-columns 220ms var(--ease);
+      }
+      .app[data-view="diff"] .host {
+        grid-template-columns: minmax(440px, 54%) minmax(420px, 46%);
+      }
+      .thread-pane {
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-rows: minmax(0, 1fr) auto;
+        overflow: hidden;
+      }
+      .transcript {
+        min-height: 0;
+        overflow: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #d7d7d3 transparent;
+      }
+      .screen {
+        display: none;
+        min-height: 100%;
+      }
+      .app[data-screen="onboarding"] .onboarding,
+      .app[data-screen="new"] .new-screen,
+      .app[data-screen="run"] .run-screen,
+      .app[data-screen="cancelled"] .cancelled-screen,
+      .app[data-screen="complete"] .complete-screen,
+      .app[data-screen="settings"] .settings-screen {
+        display: block;
+      }
+      .conversation {
+        width: min(720px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 34px 0 46px;
+      }
+      .message {
+        margin-bottom: 27px;
+      }
+      .user {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .bubble {
+        max-width: min(610px, 88%);
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: var(--soft);
+        font-size: 13px;
+        line-height: 1.58;
+      }
+      .assistant {
+        font-size: 13px;
+        line-height: 1.62;
+      }
+      .assistant p {
+        max-width: 72ch;
+        margin: 0 0 12px;
+      }
+      .assistant h2 {
+        margin: 24px 0 7px;
+        font-size: 14px;
+      }
+      .assistant ul {
+        margin: 8px 0 14px;
+        padding-left: 20px;
+      }
+      .assistant li {
+        margin: 4px 0;
+      }
+      .run-status {
+        display: flex;
+        min-height: 30px;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 8px;
+        color: var(--ink2);
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .spinner {
+        width: 15px;
+        height: 15px;
+        border: 1.7px solid #d0d0cc;
+        border-top-color: var(--ink);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+      .elapsed {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .stream-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--muted);
+        animation: breathe 1.35s ease-in-out infinite;
+      }
+      @keyframes breathe {
+        50% {
+          opacity: 0.2;
+          transform: scale(0.78);
+        }
+      }
+      details summary {
+        cursor: pointer;
+      }
+      summary::-webkit-details-marker {
+        display: none;
+      }
+      .disclosure {
+        transition: transform 160ms var(--ease);
+      }
+      details[open] > summary .disclosure {
+        transform: rotate(180deg);
+      }
+      .plan {
+        margin: 14px 0 18px;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .plan summary,
+      .tool-group > summary {
+        display: flex;
+        min-height: 38px;
+        align-items: center;
+        gap: 8px;
+        list-style: none;
+        color: var(--ink2);
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .summary-meta {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 400;
+      }
+      .plan-body {
+        display: grid;
+        gap: 8px;
+        padding: 0 0 13px 24px;
+        color: var(--ink2);
+        font-size: 12px;
+      }
+      .plan-step {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .step-state {
+        display: grid;
+        width: 15px;
+        height: 15px;
+        place-items: center;
+        border: 1px solid var(--line2);
+        border-radius: 50%;
+        color: transparent;
+      }
+      .plan-step.done .step-state {
+        border-color: var(--green);
+        color: var(--green);
+      }
+      .plan-step.active .step-state {
+        border-color: var(--ink);
+      }
+      .plan-step.active .step-state:after {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--ink);
+        content: "";
+      }
+      .tool-group {
+        margin: 8px 0 18px;
+      }
+      .tool-group > summary {
+        width: max-content;
+        max-width: 100%;
+        color: var(--ink);
+      }
+      .tool-chain {
+        display: grid;
+        grid-template-rows: 0fr;
+        opacity: 0;
+        transition:
+          grid-template-rows 220ms var(--ease),
+          opacity 160ms;
+      }
+      .tool-group[open] .tool-chain {
+        grid-template-rows: 1fr;
+        opacity: 1;
+      }
+      .tool-inner {
+        position: relative;
+        min-height: 0;
+        overflow: hidden;
+        padding: 2px 0 4px 3px;
+      }
+      .tool-inner:before {
+        position: absolute;
+        top: 13px;
+        bottom: 17px;
+        left: 10px;
+        width: 1px;
+        background: var(--line2);
+        content: "";
+      }
+      .tool-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 21px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: start;
+        padding: 6px 0;
+      }
+      .tool-icon {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        width: 21px;
+        height: 21px;
+        place-items: center;
+        color: var(--ink2);
+        background: #fff;
+      }
+      .tool-copy {
+        min-width: 0;
+        padding-top: 1px;
+      }
+      .tool-copy strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 550;
+        line-height: 1.45;
+      }
+      .tool-copy p {
+        margin: 2px 0 0;
+        overflow-wrap: anywhere;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .tool-state {
+        padding: 3px 2px 0 10px;
+        color: var(--muted);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+      .tool-state.ok {
+        color: var(--green);
+      }
+      .tool-state.fail {
+        color: var(--red);
+      }
+      .tool-state.live {
+        color: var(--amber);
+      }
+      .command {
+        margin: 7px 0 2px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f8f8f6;
+      }
+      .command summary {
+        display: flex;
+        min-height: 32px;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        list-style: none;
+        color: var(--ink2);
+        font:
+          10px "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+      }
+      .command pre {
+        margin: 0;
+        padding: 8px 10px 11px;
+        overflow: auto;
+        border-top: 1px solid var(--line);
+        color: #454541;
+        font:
+          10px/1.55 "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+      }
+      .retry {
+        animation: retry 1.4s var(--ease) 1;
+      }
+      @keyframes retry {
+        0% {
+          background: var(--amberbg);
+        }
+        100% {
+          background: transparent;
+        }
+      }
+      .agents {
+        margin-top: 7px;
+        padding: 7px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fafaf8;
+      }
+      .agent {
+        display: flex;
+        min-height: 27px;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+      .agent + .agent {
+        border-top: 1px solid var(--line);
+      }
+      .agent span:first-of-type {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .agent em {
+        color: var(--muted);
+        font-style: normal;
+      }
+      .agent em.done {
+        color: var(--green);
+      }
+      .done-mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .done-mark.cancelled {
+        color: var(--red);
+      }
+      .changes {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 18px 0 4px;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+      .changes div {
+        min-width: 0;
+        flex: 1;
+      }
+      .changes strong,
+      .changes small {
+        display: block;
+      }
+      .changes strong {
+        font-size: 12px;
+      }
+      .changes small {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .button {
+        display: inline-flex;
+        min-height: 32px;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 11px;
+        border: 1px solid var(--line2);
+        border-radius: 7px;
+        background: #fff;
+        font-size: 11px;
+        font-weight: 550;
+      }
+      .button:hover {
+        background: var(--soft);
+      }
+      .button.primary {
+        border-color: var(--ink);
+        color: #fff;
+        background: var(--ink);
+      }
+      .button.primary:hover {
+        background: #343431;
+      }
+      .inline-actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 14px;
+      }
+      .toast {
+        position: fixed;
+        z-index: 70;
+        top: 18px;
+        left: 50%;
+        display: flex;
+        min-height: 34px;
+        align-items: center;
+        gap: 7px;
+        padding: 0 11px;
+        border: 1px solid var(--line2);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 9px 28px rgba(25, 25, 21, 0.14);
+        font-size: 11px;
+        transform: translateX(-50%);
+      }
+      .toast[hidden] {
+        display: none;
+      }
+      .composer-zone {
+        position: relative;
+        z-index: 2;
+        padding: 0 max(24px, calc((100% - 720px) / 2)) 70px;
+        background: linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0),
+          #fff 22px
+        );
+      }
+      .app[data-screen="settings"] .composer-zone,
+      .app[data-screen="onboarding"] .composer-zone {
+        display: none;
+      }
+      .queue {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 0 5px 6px;
+        padding: 7px 8px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--side);
+        font-size: 11px;
+        box-shadow: 0 2px 8px rgba(24, 24, 20, 0.04);
+      }
+      .app:not([data-screen="run"]) .queue {
+        display: none;
+      }
+      .queue > span {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .queue .grip {
+        color: var(--muted);
+      }
+      .queue .icon-btn {
+        width: 26px;
+        height: 26px;
+      }
+      .composer {
+        border: 1px solid #cecec9;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow:
+          0 8px 28px rgba(25, 25, 21, 0.08),
+          0 1px 2px rgba(25, 25, 21, 0.06);
+        transition:
+          border-color 150ms,
+          box-shadow 150ms;
+      }
+      .composer:focus-within {
+        border-color: #a7a7a1;
+        box-shadow: 0 9px 30px rgba(25, 25, 21, 0.1);
+      }
+      .composer textarea {
+        display: block;
+        width: 100%;
+        min-height: 62px;
+        max-height: 180px;
+        padding: 12px 13px 7px;
+        resize: none;
+        overflow: auto;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .composer textarea::placeholder {
+        color: #777772;
+      }
+      .composer-foot {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 2px;
+        padding: 5px 7px 7px;
+      }
+      .contract {
+        display: inline-flex;
+        min-width: 0;
+        height: 28px;
+        align-items: center;
+        gap: 5px;
+        padding: 0 7px;
+        border: 0;
+        border-radius: 6px;
+        color: var(--ink2);
+        background: transparent;
+        font-size: 10px;
+      }
+      .contract:hover {
+        color: var(--ink);
+        background: var(--soft);
+      }
+      .contract span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .send {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        margin-left: auto;
+        place-items: center;
+        border: 0;
+        border-radius: 9px;
+        color: #fff;
+        background: var(--ink);
+      }
+      .send:hover {
+        background: #383834;
+      }
+      .app[data-screen="run"] .send {
+        color: var(--ink);
+        background: #e8e8e4;
+      }
+      .composer-note {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 9px;
+        text-align: center;
+      }
+      .new-center {
+        display: grid;
+        min-height: calc(100vh - 180px);
+        place-content: center;
+        padding: 40px 24px 120px;
+        text-align: center;
+      }
+      .new-logo {
+        display: inline-flex;
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 17px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line2);
+        border-radius: 11px;
+        background: var(--side);
+        box-shadow: 0 2px 8px rgba(22, 22, 18, 0.05);
+      }
+      .new-logo .brand-glyph {
+        width: 24px;
+        height: 24px;
+      }
+      .new-logo .pi-glyph {
+        margin-left: -6px;
+      }
+      .new-center h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .new-center p {
+        max-width: 48ch;
+        margin: 7px auto 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .suggestions {
+        display: grid;
+        width: min(600px, 100%);
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-top: 22px;
+      }
+      .suggestion {
+        min-height: 58px;
+        padding: 10px 11px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fff;
+        text-align: left;
+      }
+      .suggestion:hover {
+        border-color: var(--line2);
+        background: var(--side);
+      }
+      .suggestion strong,
+      .suggestion span {
+        display: block;
+      }
+      .suggestion strong {
+        font-size: 11px;
+      }
+      .suggestion span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .setup-wrap {
+        width: min(850px, calc(100% - 52px));
+        margin: 0 auto;
+        padding: 44px 0 80px;
+      }
+      .setup-wrap h1 {
+        margin: 0;
+        font-size: 21px;
+      }
+      .setup-wrap > p {
+        margin: 7px 0 26px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .setup-layout {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        min-height: 410px;
+        border-top: 1px solid var(--line);
+      }
+      .setup-steps {
+        padding: 16px 20px 0 0;
+        border-right: 1px solid var(--line);
+      }
+      .setup-step {
+        display: flex;
+        min-height: 42px;
+        align-items: center;
+        gap: 9px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .setup-step b {
+        display: grid;
+        width: 20px;
+        height: 20px;
+        place-items: center;
+        border: 1px solid var(--line2);
+        border-radius: 50%;
+        font-size: 9px;
+      }
+      .setup-step.active {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .setup-step.active b {
+        border-color: var(--ink);
+        color: #fff;
+        background: var(--ink);
+      }
+      .setup-form {
+        padding: 22px 0 0 30px;
+      }
+      .setup-panel {
+        display: none;
+        max-width: 510px;
+      }
+      .setup-panel.active {
+        display: block;
+        animation: panel 180ms var(--ease);
+      }
+      @keyframes panel {
+        from {
+          opacity: 0.5;
+          filter: blur(2px);
+          transform: translateY(3px);
+        }
+      }
+      .setup-panel h2 {
+        margin: 0 0 5px;
+        font-size: 15px;
+      }
+      .setup-panel > p {
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .field label {
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .input,
+      .select {
+        width: 100%;
+        min-height: 36px;
+        padding: 7px 9px;
+        border: 1px solid var(--line2);
+        border-radius: 7px;
+        outline: 0;
+        background: #fff;
+        font-size: 12px;
+      }
+      .input:focus,
+      .select:focus {
+        border-color: #3b78c6;
+        box-shadow: 0 0 0 2px rgba(59, 120, 198, 0.13);
+      }
+      .help {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 7px;
+        margin-top: 20px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      .settings-layout {
+        display: grid;
+        min-height: calc(100vh - 52px);
+        grid-template-columns: 220px minmax(0, 1fr);
+      }
+      .settings-nav {
+        padding: 28px 14px;
+        border-right: 1px solid var(--line);
+        background: #fbfbf9;
+      }
+      .settings-nav h1 {
+        margin: 0 10px 16px;
+        font-size: 16px;
+      }
+      .settings-nav button {
+        display: flex;
+        width: 100%;
+        min-height: 34px;
+        align-items: center;
+        gap: 9px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        font-size: 12px;
+        text-align: left;
+      }
+      .settings-nav button:hover,
+      .settings-nav button.active {
+        background: var(--selected);
+      }
+      .settings-main {
+        min-width: 0;
+        overflow: auto;
+        padding: 34px 42px 90px;
+      }
+      .settings-pane {
+        display: none;
+        width: min(680px, 100%);
+      }
+      .settings-pane.active {
+        display: block;
+      }
+      .settings-pane h2 {
+        margin: 0 0 5px;
+        font-size: 17px;
+      }
+      .settings-pane > p {
+        margin: 0 0 24px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .setting-group {
+        margin-bottom: 28px;
+      }
+      .setting-group h3 {
+        margin: 0 0 8px;
+        font-size: 11px;
+      }
+      .setting-row {
+        display: flex;
+        min-height: 58px;
+        align-items: center;
+        gap: 18px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .setting-copy {
+        min-width: 0;
+        flex: 1;
+      }
+      .setting-copy strong,
+      .setting-copy small {
+        display: block;
+      }
+      .setting-copy strong {
+        font-size: 12px;
+        font-weight: 550;
+      }
+      .setting-copy small {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.45;
+      }
+      .setting-row .select {
+        width: 180px;
+        min-width: 180px;
+        flex: 0 0 180px;
+      }
+      .toggle {
+        position: relative;
+        width: 34px;
+        height: 20px;
+        flex: 0 0 auto;
+        padding: 0;
+        border: 0;
+        border-radius: 10px;
+        background: #c8c8c3;
+      }
+      .toggle:after {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        content: "";
+        transition: transform 180ms var(--ease);
+      }
+      .toggle.on {
+        background: var(--ink);
+      }
+      .toggle.on:after {
+        transform: translateX(14px);
+      }
+      .tool-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 10px 0 2px;
+      }
+      .tool-chip {
+        display: inline-flex;
+        height: 29px;
+        align-items: center;
+        padding: 0 8px;
+        border: 1px solid var(--line2);
+        border-radius: 7px;
+        background: #fff;
+        font:
+          10px "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+      }
+      .tool-chip[aria-pressed="false"] {
+        color: var(--muted);
+        text-decoration: line-through;
+        background: var(--soft);
+      }
+      .review {
+        display: none;
+        min-width: 0;
+        min-height: 0;
+        border-left: 1px solid var(--line);
+        background: #fbfbfa;
+      }
+      .app[data-view="diff"] .review {
+        display: grid;
+        grid-template-rows: 52px minmax(0, 1fr);
+        animation: review 220ms var(--ease);
+      }
+      @keyframes review {
+        from {
+          opacity: 0.45;
+          clip-path: inset(0 0 0 12%);
+          transform: translateX(16px);
+        }
+      }
+      .review-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+        background: #fff;
+      }
+      .review-head strong {
+        min-width: 0;
+        flex: 1;
+        font-size: 12px;
+      }
+      .review-layout {
+        display: grid;
+        min-width: 0;
+        min-height: 0;
+        grid-template-columns: 164px minmax(0, 1fr);
+      }
+      .file-list {
+        overflow: auto;
+        padding: 10px 7px;
+        border-right: 1px solid var(--line);
+        background: #f6f6f3;
+      }
+      .file-status {
+        display: flex;
+        justify-content: space-between;
+        padding: 4px 7px 8px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .file-btn {
+        display: grid;
+        width: 100%;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 5px;
+        padding: 7px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        text-align: left;
+      }
+      .file-btn:hover,
+      .file-btn.active {
+        background: var(--selected);
+      }
+      .file-btn strong,
+      .file-btn small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .file-btn strong {
+        font:
+          10px "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+      }
+      .file-btn small {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .delta {
+        align-self: center;
+        color: var(--green);
+        font:
+          9px "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+      }
+      .minus {
+        color: var(--red);
+      }
+      .diff-view {
+        min-width: 0;
+        min-height: 0;
+        overflow: auto;
+        background: #fff;
+      }
+      .diff-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        min-height: 38px;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.97);
+      }
+      .diff-head strong {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        font:
+          10px "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .diff-lines {
+        min-width: max-content;
+        padding: 6px 0 22px;
+        font:
+          10px/1.55 "SFMono-Regular",
+          "Cascadia Code",
+          Consolas,
+          monospace;
+      }
+      .diff-line {
+        position: relative;
+        display: grid;
+        min-height: 21px;
+        grid-template-columns: 36px 36px minmax(390px, 1fr);
+      }
+      .diff-line .ln {
+        padding: 2px 7px;
+        color: #969690;
+        text-align: right;
+        user-select: none;
+      }
+      .diff-line code {
+        padding: 2px 30px 2px 9px;
+        white-space: pre;
+      }
+      .diff-line.add {
+        background: var(--greenbg);
+      }
+      .diff-line.del {
+        background: var(--redbg);
+      }
+      .line-comment {
+        position: absolute;
+        top: 0;
+        right: 5px;
+        display: none;
+        width: 21px;
+        height: 21px;
+        place-items: center;
+        border: 0;
+        border-radius: 5px;
+        color: #fff;
+        background: var(--blue);
+      }
+      .diff-line:hover .line-comment,
+      .diff-line:focus-within .line-comment {
+        display: grid;
+      }
+      .comment-box {
+        display: none;
+        margin: 6px 10px 10px 82px;
+        padding: 8px;
+        border: 1px solid var(--line2);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 5px 18px rgba(20, 20, 18, 0.08);
+      }
+      .comment-box.open {
+        display: block;
+      }
+      .comment-box textarea {
+        width: 100%;
+        min-height: 52px;
+        resize: vertical;
+        border: 0;
+        outline: 0;
+        font-size: 11px;
+      }
+      .comment-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+      .history-overlay {
+        position: fixed;
+        z-index: 20;
+        inset: 0;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 9vh;
+        background: rgba(33, 33, 30, 0.18);
+        backdrop-filter: blur(2px);
+      }
+      .app[data-view="history"] .history-overlay {
+        display: flex;
+      }
+      .history-dialog {
+        width: min(620px, calc(100vw - 64px));
+        overflow: hidden;
+        border: 1px solid var(--line2);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow:
+          0 24px 70px rgba(24, 24, 20, 0.2),
+          0 2px 8px rgba(24, 24, 20, 0.08);
+        animation: dialog 180ms var(--ease);
+      }
+      @keyframes dialog {
+        from {
+          opacity: 0.45;
+          filter: blur(3px);
+          transform: translateY(-8px) scale(0.985);
+        }
+      }
+      .history-search {
+        display: flex;
+        height: 48px;
+        align-items: center;
+        gap: 9px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .history-search input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        font-size: 13px;
+      }
+      .history-results {
+        max-height: min(520px, 68vh);
+        overflow: auto;
+        padding: 7px;
+      }
+      .history-section {
+        padding: 7px 8px 4px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .history-result {
+        display: grid;
+        width: 100%;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        padding: 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        text-align: left;
+      }
+      .history-result:hover,
+      .history-result.selected {
+        background: var(--selected);
+      }
+      .history-result strong,
+      .history-result small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .history-result strong {
+        font-size: 12px;
+      }
+      .history-result small {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .history-result time {
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .history-empty {
+        display: none;
+        padding: 42px 20px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+      .popover {
+        position: fixed;
+        z-index: 40;
+        width: 250px;
+        overflow: hidden;
+        border: 1px solid var(--line2);
+        border-radius: 10px;
+        background: #fff;
+        box-shadow:
+          0 16px 45px rgba(25, 25, 21, 0.16),
+          0 2px 7px rgba(25, 25, 21, 0.06);
+        animation: menu 140ms var(--ease);
+      }
+      .popover[hidden] {
+        display: none;
+      }
+      @keyframes menu {
+        from {
+          opacity: 0.5;
+          clip-path: inset(10% 0 0 0);
+          transform: translateY(5px) scale(0.985);
+        }
+      }
+      .popover-head {
+        padding: 9px 10px 6px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .popover-option {
+        display: grid;
+        width: calc(100% - 8px);
+        min-height: 42px;
+        grid-template-columns: minmax(0, 1fr) 18px;
+        align-items: center;
+        gap: 8px;
+        margin: 2px 4px;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        text-align: left;
+      }
+      .popover-option:hover,
+      .popover-option:focus,
+      .popover-option.selected {
+        background: var(--soft);
+      }
+      .popover-option strong,
+      .popover-option small {
+        display: block;
+      }
+      .popover-option strong {
+        font-size: 11px;
+      }
+      .popover-option small {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+      .popover-option .check {
+        visibility: hidden;
+      }
+      .popover-option.selected .check {
+        visibility: visible;
+      }
+      .dock {
+        position: fixed;
+        z-index: 50;
+        left: 50%;
+        bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        max-width: calc(100vw - 24px);
+        padding: 5px;
+        border: 1px solid #343430;
+        border-radius: 10px;
+        color: #f7f7f4;
+        background: #252522;
+        box-shadow: 0 13px 38px rgba(22, 22, 19, 0.24);
+        transform: translateX(-50%);
+      }
+      .dock > span {
+        padding: 0 7px;
+        color: #bfbfba;
+        font-size: 9px;
+        white-space: nowrap;
+      }
+      .dock button {
+        min-height: 27px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: 6px;
+        color: #d0d0cb;
+        background: transparent;
+        font-size: 9px;
+        white-space: nowrap;
+      }
+      .dock button:hover {
+        color: #fff;
+        background: #3a3a36;
+      }
+      .dock button.active {
+        color: var(--ink);
+        background: #fff;
+      }
+      .app.side-closed {
+        --sidew: 68px;
+      }
+      .app.side-closed .brand strong,
+      .app.side-closed .side-actions span,
+      .app.side-closed .side-label,
+      .app.side-closed .project-head strong,
+      .app.side-closed .project-head .chev,
+      .app.side-closed .threads,
+      .app.side-closed .side-foot span {
+        display: none;
+      }
+      .app.side-closed .brand,
+      .app.side-closed .nav-btn,
+      .app.side-closed .project-head,
+      .app.side-closed .side-foot .nav-btn {
+        justify-content: center;
+      }
+      .app.side-closed .side-head {
+        padding-inline: 8px;
+      }
+      .app.side-closed #collapseSide {
+        display: none;
+      }
+      @media (max-width: 1080px) {
+        .app {
+          --sidew: 220px;
+        }
+        .app[data-view="diff"] .host {
+          grid-template-columns: minmax(0, 48%) minmax(520px, 52%);
+        }
+        .app[data-view="diff"] .conversation {
+          width: calc(100% - 34px);
+        }
+        .app[data-view="diff"] .composer-zone {
+          padding-inline: 17px;
+        }
+        .project-contract {
+          display: none;
+        }
+      }
+      @media (max-width: 850px) {
+        .app {
+          --sidew: 68px;
+        }
+        .brand strong,
+        .side-actions span,
+        .side-label,
+        .project-head strong,
+        .project-head .chev,
+        .threads,
+        .side-foot span {
+          display: none;
+        }
+        .brand,
+        .nav-btn,
+        .project-head,
+        .side-foot .nav-btn {
+          justify-content: center;
+        }
+        .side-head {
+          padding-inline: 8px;
+        }
+        #collapseSide {
+          display: none;
+        }
+        .app[data-view="diff"] .host {
+          grid-template-columns: 1fr;
+        }
+        .app[data-view="diff"] .thread-pane {
+          display: none;
+        }
+        .review {
+          border-left: 0;
+        }
+        .review-layout {
+          grid-template-columns: 142px minmax(0, 1fr);
+        }
+        .setup-layout {
+          grid-template-columns: 150px 1fr;
+        }
+        .setup-form {
+          padding-left: 22px;
+        }
+        .settings-layout {
+          grid-template-columns: 180px 1fr;
+        }
+        .settings-main {
+          padding-inline: 25px;
+        }
+        .dock > span {
+          display: none;
+        }
+        .dock button {
+          padding-inline: 6px;
+        }
+      }
+      @media (max-height: 660px) {
+        .conversation {
+          padding-top: 22px;
+        }
+        .composer-zone {
+          padding-bottom: 50px;
+        }
+        .new-center {
+          padding-bottom: 90px;
+        }
+        .dock {
+          bottom: 6px;
+        }
+        .setup-wrap {
+          padding-top: 26px;
+        }
+        .settings-main {
+          padding-top: 24px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *:before,
+        *:after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg aria-hidden="true" width="0" height="0" style="position: absolute">
+      <symbol id="panel" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
+      </symbol>
+      <symbol id="pen" viewBox="0 0 24 24">
+        <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+        <path
+          d="M18.4 2.6a1 1 0 0 1 3 3l-9 9a2 2 0 0 1-.9.5l-2.9.9a.5.5 0 0 1-.6-.6l.8-2.9a2 2 0 0 1 .6-.9z"
+        />
+      </symbol>
+      <symbol id="search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </symbol>
+      <symbol id="folder" viewBox="0 0 24 24">
+        <path
+          d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+        />
+      </symbol>
+      <symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+      <symbol id="dots" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+      </symbol>
+      <symbol id="settings" viewBox="0 0 24 24">
+        <path d="M20 7h-9M14 17H5" />
+        <circle cx="17" cy="17" r="3" />
+        <circle cx="7" cy="7" r="3" />
+      </symbol>
+      <symbol id="diff" viewBox="0 0 24 24">
+        <circle cx="18" cy="18" r="3" />
+        <circle cx="6" cy="6" r="3" />
+        <path d="M13 6h3a2 2 0 0 1 2 2v7M11 18H8a2 2 0 0 1-2-2V9" />
+      </symbol>
+      <symbol id="file" viewBox="0 0 24 24">
+        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+        <path d="M14 2v4a2 2 0 0 0 2 2h4M16 13H8M16 17H8" />
+      </symbol>
+      <symbol id="searchcode" viewBox="0 0 24 24">
+        <path d="m13 13.5 2-2.5-2-2.5m8 12.5-4.3-4.3M9 8.5 7 11l2 2.5" />
+        <circle cx="11" cy="11" r="8" />
+      </symbol>
+      <symbol id="terminal" viewBox="0 0 24 24">
+        <path d="m7 11 2-2-2-2M11 13h4" />
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+      </symbol>
+      <symbol id="editfile" viewBox="0 0 24 24">
+        <path
+          d="m18 5-2.4-2.4A2 2 0 0 0 14.2 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2"
+        />
+        <path
+          d="M21.4 12.6a1 1 0 0 0-3-3l-4 4a2 2 0 0 0-.5.9l-.9 2.9a.5.5 0 0 0 .6.6l2.9-.9a2 2 0 0 0 .9-.5z"
+        />
+      </symbol>
+      <symbol id="check" viewBox="0 0 24 24">
+        <path d="M20 6 9 17l-5-5" />
+      </symbol>
+      <symbol id="stop" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <rect x="9" y="9" width="6" height="6" rx="1" />
+      </symbol>
+      <symbol id="up" viewBox="0 0 24 24">
+        <path d="m5 12 7-7 7 7M12 19V5" />
+      </symbol>
+      <symbol id="brain" viewBox="0 0 24 24">
+        <path
+          d="M12 5a3 3 0 1 0-6 .1 4 4 0 0 0-2.5 5.8 4 4 0 0 0 .5 6.6A4 4 0 1 0 12 18ZM12 5a3 3 0 1 1 6 .1 4 4 0 0 1 2.5 5.8 4 4 0 0 1-.5 6.6A4 4 0 1 1 12 18Z"
+        />
+        <path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4" />
+      </symbol>
+      <symbol id="shield" viewBox="0 0 24 24">
+        <path
+          d="M20 13c0 5-3.5 7.5-7.7 9C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"
+        />
+        <path d="m9 12 2 2 4-4" />
+      </symbol>
+      <symbol id="history" viewBox="0 0 24 24">
+        <path
+          d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8M3 3v5h5M12 7v5l4 2"
+        />
+      </symbol>
+      <symbol id="tree" viewBox="0 0 24 24">
+        <path
+          d="M21 12h-8M21 6H8M21 18h-8M3 6v4c0 1.1.9 2 2 2h3M3 10v6c0 1.1.9 2 2 2h3"
+        />
+      </symbol>
+      <symbol id="undo" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 9-9 9.8 9.8 0 0 0-6.7 2.7L3 8M3 3v5h5" />
+      </symbol>
+      <symbol id="x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18M6 6l12 12" />
+      </symbol>
+      <symbol id="plus" viewBox="0 0 24 24">
+        <path d="M5 12h14M12 5v14" />
+      </symbol>
+      <symbol id="left" viewBox="0 0 24 24">
+        <path d="m12 19-7-7 7-7M19 12H5" />
+      </symbol>
+      <symbol id="copy" viewBox="0 0 24 24">
+        <rect width="14" height="14" x="8" y="8" rx="2" />
+        <path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2" />
+      </symbol>
+      <symbol id="external" viewBox="0 0 24 24">
+        <path
+          d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+        />
+      </symbol>
+      <symbol id="grip" viewBox="0 0 24 24">
+        <circle cx="9" cy="5" r="1" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="9" cy="19" r="1" />
+        <circle cx="15" cy="5" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="15" cy="19" r="1" />
+      </symbol>
+    </svg>
+    <div id="app" class="app" data-view="run" data-screen="run">
+      <aside class="sidebar">
+        <div class="side-head">
+          <button class="brand" data-view="new" aria-label="2pi，新任务">
+            <span class="brand-mark" aria-hidden="true"
+              ><img class="brand-glyph" src="./two-logo.svg" alt="" /><img
+                class="brand-glyph pi-glyph"
+                src="./pi-logo.svg"
+                alt=""
+              /></span></button
+          ><button class="icon-btn" id="collapseSide" title="收起侧栏">
+            <svg class="icon"><use href="#panel" /></svg>
+          </button>
+        </div>
+        <div class="side-actions">
+          <button class="nav-btn primary" data-view="new">
+            <svg class="icon"><use href="#pen" /></svg
+            ><span>新任务</span></button
+          ><button class="nav-btn" data-view="history">
+            <svg class="icon"><use href="#search" /></svg><span>搜索记录</span>
+          </button>
+        </div>
+        <div class="side-scroll">
+          <div class="side-label">
+            <span>项目</span
+            ><button title="添加项目">
+              <svg class="icon sm"><use href="#plus" /></svg>
+            </button>
+          </div>
+          <section class="project open">
+            <button class="project-head" aria-expanded="true">
+              <svg class="icon sm"><use href="#folder" /></svg
+              ><strong>2pi</strong
+              ><svg class="icon sm chev"><use href="#chev" /></svg>
+            </button>
+            <div class="threads">
+              <div class="threads-inner">
+                <button
+                  class="thread active"
+                  data-current-thread
+                  data-view="run"
+                >
+                  <span
+                    ><strong>修复设置保存顺序</strong
+                    ><small id="currentThreadMeta"
+                      >正在运行 · 2 分钟</small
+                    ></span
+                  ><span class="icon-btn more"
+                    ><svg class="icon sm"><use href="#dots" /></svg
+                  ></span>
+                </button>
+                <button class="thread" data-view="complete">
+                  <span
+                    ><strong>重构 Provider 类型</strong
+                    ><small>已完成 · 今天 10:42</small></span
+                  ><span class="icon-btn more"
+                    ><svg class="icon sm"><use href="#dots" /></svg
+                  ></span>
+                </button>
+                <button class="thread">
+                  <span
+                    ><strong>检查 Windows 启动回退</strong
+                    ><small>已完成 · 昨天</small></span
+                  ><span class="icon-btn more"
+                    ><svg class="icon sm"><use href="#dots" /></svg
+                  ></span>
+                </button>
+              </div>
+            </div>
+          </section>
+          <section class="project">
+            <button class="project-head" aria-expanded="false">
+              <svg class="icon sm"><use href="#folder" /></svg
+              ><strong>notes</strong
+              ><svg class="icon sm chev"><use href="#chev" /></svg>
+            </button>
+            <div class="threads">
+              <div class="threads-inner">
+                <button class="thread">
+                  <span
+                    ><strong>整理发布记录</strong><small>上周五</small></span
+                  >
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="side-foot">
+          <button class="nav-btn" data-view="settings">
+            <svg class="icon"><use href="#settings" /></svg
+            ><span>设置</span></button
+          ><button class="nav-btn">
+            <span class="avatar">林</span><span>本地工作区</span>
+          </button>
+        </div>
+      </aside>
+      <main class="workspace">
+        <header class="topbar">
+          <div class="title">
+            <strong id="headerTitle">修复设置保存顺序</strong
+            ><small id="headerMeta">2pi · main · /home/lin/projects/2pi</small>
+          </div>
+          <div class="top-actions">
+            <button class="text-btn" data-view="history">
+              <svg class="icon"><use href="#history" /></svg
+              ><span>记录</span></button
+            ><button class="text-btn" data-view="diff">
+              <svg class="icon"><use href="#diff" /></svg
+              ><span>改动 3</span></button
+            ><button class="icon-btn" title="更多">
+              <svg class="icon"><use href="#dots" /></svg>
+            </button>
+          </div>
+        </header>
+        <div class="host">
+          <section class="thread-pane">
+            <div class="transcript">
+              <section class="screen onboarding">
+                <div class="setup-wrap">
+                  <h1>开始使用 2pi</h1>
+                  <p>
+                    添加模型并选择本地项目。密钥、设置和会话只保存在这台电脑。
+                  </p>
+                  <div class="setup-layout">
+                    <nav class="setup-steps">
+                      <div class="setup-step active" data-step="1">
+                        <b>1</b>模型供应商
+                      </div>
+                      <div class="setup-step" data-step="2">
+                        <b>2</b>选择模型
+                      </div>
+                      <div class="setup-step" data-step="3">
+                        <b>3</b>本地项目
+                      </div>
+                    </nav>
+                    <div class="setup-form">
+                      <div class="setup-panel active" data-panel="1">
+                        <h2>连接模型供应商</h2>
+                        <p>使用已有供应商或兼容 OpenAI 协议的自定义地址。</p>
+                        <div class="field">
+                          <label>供应商</label
+                          ><select class="select">
+                            <option>OpenAI</option>
+                            <option>Anthropic</option>
+                            <option>自定义协议</option>
+                          </select>
+                        </div>
+                        <div class="field">
+                          <label>API 密钥</label
+                          ><input
+                            class="input mono"
+                            type="password"
+                            value="sk-example-local-key"
+                          /><span class="help">密钥只在主进程中解密。</span>
+                        </div>
+                        <div class="form-actions">
+                          <button class="button">测试连接</button
+                          ><button
+                            class="button primary step-next"
+                            data-next="2"
+                          >
+                            继续
+                          </button>
+                        </div>
+                      </div>
+                      <div class="setup-panel" data-panel="2">
+                        <h2>选择默认模型</h2>
+                        <p>运行期间模型保持锁定，变更从下一次任务开始生效。</p>
+                        <div class="field">
+                          <label>模型</label
+                          ><select class="select">
+                            <option>GPT-5.4</option>
+                            <option>GPT-5.4 mini</option>
+                            <option>Claude Sonnet 4.5</option>
+                          </select>
+                        </div>
+                        <div class="field">
+                          <label>思考强度</label
+                          ><select class="select">
+                            <option>medium</option>
+                            <option>high</option>
+                            <option>xhigh</option>
+                          </select>
+                        </div>
+                        <div class="form-actions">
+                          <button class="button step-next" data-next="1">
+                            返回</button
+                          ><button
+                            class="button primary step-next"
+                            data-next="3"
+                          >
+                            继续
+                          </button>
+                        </div>
+                      </div>
+                      <div class="setup-panel" data-panel="3">
+                        <h2>打开本地项目</h2>
+                        <p>2pi 只在你选择的项目目录中读取、修改和验证代码。</p>
+                        <div class="field">
+                          <label>项目目录</label
+                          ><input
+                            class="input mono"
+                            value="/home/lin/projects/2pi"
+                          />
+                        </div>
+                        <div class="field">
+                          <label>默认执行档位</label
+                          ><select class="select">
+                            <option>全自动</option>
+                            <option>只读</option>
+                          </select>
+                        </div>
+                        <div class="form-actions">
+                          <button class="button step-next" data-next="2">
+                            返回</button
+                          ><button class="button primary" data-view="new">
+                            保存并开始
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="screen new-screen">
+                <div class="new-center">
+                  <div class="new-logo" role="img" aria-label="2pi">
+                    <img
+                      class="brand-glyph"
+                      src="./two-logo.svg"
+                      alt=""
+                      aria-hidden="true"
+                    /><img
+                      class="brand-glyph pi-glyph"
+                      src="./pi-logo.svg"
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <h1>开始一个任务</h1>
+                  <p>
+                    当前项目为 2pi。2pi
+                    可以读取代码、运行命令、修改文件并验证结果。
+                  </p>
+                  <div class="suggestions">
+                    <button
+                      class="suggestion"
+                      data-prompt="解释 src/main/agent-runtime.ts 的职责与调用路径"
+                    >
+                      <strong>解释一个模块</strong
+                      ><span>读取代码并整理调用关系</span></button
+                    ><button
+                      class="suggestion"
+                      data-prompt="定位设置保存后当前模型没有更新的问题，并补上回归测试"
+                    >
+                      <strong>修复一个问题</strong
+                      ><span>定位根因、修改并验证</span></button
+                    ><button
+                      class="suggestion"
+                      data-prompt="审阅当前分支相对 main 的改动，优先检查行为回退"
+                    >
+                      <strong>审阅当前改动</strong
+                      ><span>检查缺陷和测试遗漏</span></button
+                    ><button
+                      class="suggestion"
+                      data-prompt="根据现有实现更新项目功能说明"
+                    >
+                      <strong>整理项目说明</strong
+                      ><span>让文档与实现保持一致</span>
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <section class="screen run-screen">
+                <div class="conversation">
+                  <article class="message user">
+                    <div class="bubble">
+                      修复设置保存后当前模型偶尔没有更新的问题，并补上回归测试。
+                    </div>
+                  </article>
+                  <article class="message assistant">
+                    <div class="run-status">
+                      <span class="spinner"></span><span>正在处理</span
+                      ><span class="stream-dot"></span
+                      ><time class="elapsed" id="elapsed">00:24</time>
+                    </div>
+                    <p>
+                      我会先确认设置保存、运行时重绑和会话恢复之间的顺序，再用现有测试复现。
+                    </p>
+                    <details class="plan" open>
+                      <summary>
+                        <svg class="icon sm disclosure">
+                          <use href="#chev" /></svg
+                        ><span>计划</span
+                        ><span class="summary-meta">2 / 4</span>
+                      </summary>
+                      <div class="plan-body">
+                        <div class="plan-step done">
+                          <span class="step-state"
+                            ><svg class="icon sm">
+                              <use href="#check" /></svg></span
+                          >定位保存与运行时入口
+                        </div>
+                        <div class="plan-step done">
+                          <span class="step-state"
+                            ><svg class="icon sm">
+                              <use href="#check" /></svg></span
+                          >复现旧模型仍被使用
+                        </div>
+                        <div class="plan-step active">
+                          <span class="step-state"></span>调整重绑顺序并补测试
+                        </div>
+                        <div class="plan-step">
+                          <span class="step-state"></span>运行检查与回归测试
+                        </div>
+                      </div>
+                    </details>
+                    <details class="tool-group" open>
+                      <summary>
+                        <svg class="icon"><use href="#tree" /></svg
+                        ><span>工具调用</span
+                        ><span class="summary-meta">6 项 · 展开</span
+                        ><svg class="icon sm disclosure">
+                          <use href="#chev" />
+                        </svg>
+                      </summary>
+                      <div class="tool-chain">
+                        <div class="tool-inner">
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#searchcode" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>搜索代码</strong>
+                              <p class="mono">
+                                bindRuntime · activeModel · restoreSession
+                              </p>
+                            </div>
+                            <span class="tool-state ok">完成</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#file" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>读取 4 个文件</strong>
+                              <p>
+                                settings-store.ts、ipc.ts、agent-runtime.ts、settings-store.test.ts
+                              </p>
+                            </div>
+                            <span class="tool-state ok">完成</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#terminal" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>运行回归测试</strong>
+                              <p class="mono">
+                                npm test -- settings-store.test.ts
+                              </p>
+                              <details class="command">
+                                <summary>
+                                  <svg class="icon sm disclosure">
+                                    <use href="#chev" /></svg
+                                  >查看失败输出
+                                </summary>
+                                <pre>
+FAIL tests/settings-store.test.ts
+expected: gpt-5.4
+received: claude-sonnet-4-5
+
+1 failed, 7 passed</pre
+                                >
+                              </details>
+                            </div>
+                            <span class="tool-state fail">失败</span>
+                          </div>
+                          <div class="tool-item retry">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#undo" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>自动重试</strong>
+                              <p>保留失败上下文，2 秒后重试第 1 / 3 次。</p>
+                            </div>
+                            <span class="tool-state ok">已继续</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#editfile" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>修改 3 个文件</strong>
+                              <p>
+                                重绑运行时后再恢复会话，并覆盖已有历史的恢复场景。
+                              </p>
+                            </div>
+                            <span class="tool-state ok">完成</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#tree" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>后台 Agent</strong>
+                              <p>并行核对恢复路径和测试覆盖。</p>
+                              <div class="agents">
+                                <div class="agent">
+                                  <svg class="icon sm">
+                                    <use href="#searchcode" /></svg
+                                  ><span>定位会话恢复路径</span
+                                  ><em>正在读取</em>
+                                </div>
+                                <div class="agent">
+                                  <svg class="icon sm">
+                                    <use href="#check" /></svg
+                                  ><span>检查测试覆盖</span
+                                  ><em class="done">已完成</em>
+                                </div>
+                              </div>
+                            </div>
+                            <span class="tool-state live">运行中</span>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  </article>
+                </div>
+              </section>
+              <section class="screen cancelled-screen">
+                <div class="conversation">
+                  <article class="message user">
+                    <div class="bubble">
+                      修复设置保存后当前模型偶尔没有更新的问题，并补上回归测试。
+                    </div>
+                  </article>
+                  <article class="message assistant">
+                    <div class="done-mark cancelled">
+                      <svg class="icon"><use href="#stop" /></svg>任务已中止 ·
+                      00:26
+                    </div>
+                    <details class="tool-group">
+                      <summary>
+                        <svg class="icon"><use href="#tree" /></svg
+                        ><span>中止前完成 5 项工具调用</span
+                        ><span class="summary-meta">未保留进行中的命令</span
+                        ><svg class="icon sm disclosure">
+                          <use href="#chev" />
+                        </svg>
+                      </summary>
+                      <div class="tool-chain">
+                        <div class="tool-inner">
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#searchcode" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>搜索并读取设置运行时</strong>
+                              <p>已经完成的读取结果仍保留在当前会话中。</p>
+                            </div>
+                            <span class="tool-state ok">完成</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#terminal" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>回归测试</strong>
+                              <p>进程已停止，没有继续自动重试。</p>
+                            </div>
+                            <span class="tool-state fail">中止</span>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                    <h2>已停止当前任务</h2>
+                    <p>
+                      已完成的会话记录仍然保留。你可以修改要求后继续，或者重新运行同一任务。
+                    </p>
+                    <button class="button" data-view="run">重新运行</button>
+                  </article>
+                </div>
+              </section>
+              <section class="screen complete-screen">
+                <div class="conversation">
+                  <article class="message user">
+                    <div class="bubble">
+                      修复设置保存后当前模型偶尔没有更新的问题，并补上回归测试。
+                    </div>
+                  </article>
+                  <article class="message assistant">
+                    <div class="done-mark">
+                      <svg class="icon"><use href="#check" /></svg>已完成 · 1 分
+                      18 秒
+                    </div>
+                    <details class="tool-group">
+                      <summary>
+                        <svg class="icon"><use href="#tree" /></svg
+                        ><span>已完成 8 项工具调用</span
+                        ><span class="summary-meta"
+                          >读取 4 · 修改 3 · 命令 2</span
+                        ><svg class="icon sm disclosure">
+                          <use href="#chev" />
+                        </svg>
+                      </summary>
+                      <div class="tool-chain">
+                        <div class="tool-inner">
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#searchcode" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>搜索并读取设置运行时</strong>
+                              <p>定位到保存、重绑和恢复三个入口。</p>
+                            </div>
+                            <span class="tool-state ok">完成</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#editfile" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>修改 3 个文件</strong>
+                              <p>+34 / -9</p>
+                            </div>
+                            <span class="tool-state ok">完成</span>
+                          </div>
+                          <div class="tool-item">
+                            <span class="tool-icon"
+                              ><svg class="icon"><use href="#terminal" /></svg
+                            ></span>
+                            <div class="tool-copy">
+                              <strong>运行验证</strong>
+                              <p>类型检查通过 · 42 项测试通过</p>
+                            </div>
+                            <span class="tool-state ok">通过</span>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                    <p>
+                      问题来自保存后先恢复会话、再重新绑定运行时。恢复过程会继续持有旧模型引用，因此新设置虽然已经写入文件，本次会话仍然使用旧模型。
+                    </p>
+                    <h2>已完成</h2>
+                    <ul>
+                      <li>保存设置后先使用规范化配置重新绑定当前运行时。</li>
+                      <li>运行时完成重绑后再恢复原有 JSONL 会话。</li>
+                      <li>新增已有会话恢复场景，确认下一次任务使用新模型。</li>
+                    </ul>
+                    <p>验证结果：类型检查通过，相关 42 项测试全部通过。</p>
+                    <div class="changes">
+                      <svg class="icon"><use href="#diff" /></svg>
+                      <div>
+                        <strong>3 个文件有改动</strong
+                        ><small>+34 / -9 · 工作区尚未提交</small>
+                      </div>
+                      <button class="button" data-view="diff">查看改动</button>
+                    </div>
+                    <div class="inline-actions">
+                      <button class="icon-btn" title="复制结果">
+                        <svg class="icon"><use href="#copy" /></svg></button
+                      ><button class="icon-btn" title="在编辑器中打开">
+                        <svg class="icon"><use href="#external" /></svg>
+                      </button>
+                    </div>
+                  </article>
+                </div>
+              </section>
+              <section class="screen settings-screen">
+                <div class="settings-layout">
+                  <nav class="settings-nav">
+                    <h1>设置</h1>
+                    <button class="active" data-tab="general">
+                      <svg class="icon"><use href="#settings" /></svg
+                      >常规</button
+                    ><button data-tab="models">
+                      <svg class="icon"><use href="#brain" /></svg
+                      >模型供应商</button
+                    ><button data-tab="agent">
+                      <svg class="icon"><use href="#shield" /></svg
+                      >Agent</button
+                    ><button data-tab="data">
+                      <svg class="icon"><use href="#history" /></svg>数据与会话
+                    </button>
+                  </nav>
+                  <div class="settings-main">
+                    <section class="settings-pane active" data-pane="general">
+                      <h2>常规</h2>
+                      <p>控制工作区、后续消息与桌面行为。</p>
+                      <div class="setting-group">
+                        <h3>任务</h3>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>后续消息</strong
+                            ><small>运行期间发送的消息默认加入下一回合。</small>
+                          </div>
+                          <select class="select">
+                            <option>排队到下一回合</option>
+                            <option>调整当前回合</option>
+                          </select>
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>任务运行时防止系统休眠</strong
+                            ><small>仅在 2pi 正在执行任务时生效。</small>
+                          </div>
+                          <button
+                            class="toggle on"
+                            role="switch"
+                            aria-checked="true"
+                          ></button>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="settings-pane" data-pane="models">
+                      <h2>模型供应商</h2>
+                      <p>供应商、密钥和模型发现均保存在本机设置文件中。</p>
+                      <div class="setting-group">
+                        <h3>OpenAI</h3>
+                        <div class="field">
+                          <label>API 地址</label
+                          ><input
+                            class="input mono"
+                            value="https://api.openai.com/v1"
+                          />
+                        </div>
+                        <div class="field">
+                          <label>API 密钥</label
+                          ><input
+                            class="input mono"
+                            type="password"
+                            value="sk-example-local-key"
+                          />
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>连接状态</strong
+                            ><small>上次测试成功 · 发现 6 个模型</small>
+                          </div>
+                          <button
+                            class="button"
+                            data-toast="连接测试成功，已发现 6 个模型"
+                          >
+                            重新测试
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="settings-pane" data-pane="agent">
+                      <h2>Agent</h2>
+                      <p>全局参数从下一次任务开始生效，运行期间保持锁定。</p>
+                      <div class="setting-group">
+                        <h3>执行</h3>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>默认执行档位</strong
+                            ><small>只读会强制关闭命令、编辑和写入。</small>
+                          </div>
+                          <select class="select">
+                            <option>全自动</option>
+                            <option>只读</option>
+                          </select>
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>思考强度</strong
+                            ><small>模型不支持时自动收敛。</small>
+                          </div>
+                          <select class="select">
+                            <option>medium</option>
+                            <option>high</option>
+                            <option>xhigh</option>
+                            <option>max</option>
+                          </select>
+                        </div>
+                        <div class="tool-chips">
+                          <button class="tool-chip" aria-pressed="true">
+                            read</button
+                          ><button class="tool-chip" aria-pressed="true">
+                            grep</button
+                          ><button class="tool-chip" aria-pressed="true">
+                            find</button
+                          ><button class="tool-chip" aria-pressed="true">
+                            ls</button
+                          ><button class="tool-chip" aria-pressed="true">
+                            bash</button
+                          ><button class="tool-chip" aria-pressed="true">
+                            edit</button
+                          ><button class="tool-chip" aria-pressed="true">
+                            write
+                          </button>
+                        </div>
+                      </div>
+                      <div class="setting-group">
+                        <h3>上下文与恢复</h3>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>自动压缩</strong
+                            ><small
+                              >预留 16,384 tokens，保留近期 20,000
+                              tokens。</small
+                            >
+                          </div>
+                          <button
+                            class="toggle on"
+                            role="switch"
+                            aria-checked="true"
+                          ></button>
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>失败自动重试</strong
+                            ><small>最多 3 次，初始等待 2 秒。</small>
+                          </div>
+                          <button
+                            class="toggle on"
+                            role="switch"
+                            aria-checked="true"
+                          ></button>
+                        </div>
+                        <div class="field" style="margin-top: 15px">
+                          <label>自定义指令</label
+                          ><textarea
+                            class="input"
+                            style="min-height: 90px; resize: vertical"
+                            placeholder="追加到基础系统提示之后"
+                          ></textarea>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="settings-pane" data-pane="data">
+                      <h2>数据与会话</h2>
+                      <p>明确本地数据的位置、格式与生命周期。</p>
+                      <div class="setting-group">
+                        <h3>本地存储</h3>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>应用设置</strong
+                            ><small class="mono"
+                              >Electron userData/settings.json</small
+                            >
+                          </div>
+                          <button
+                            class="button"
+                            data-toast="示例：已打开设置目录"
+                          >
+                            打开目录
+                          </button>
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>会话记录</strong
+                            ><small class="mono"
+                              >Electron userData/sessions/*.jsonl</small
+                            >
+                          </div>
+                          <button
+                            class="button"
+                            data-toast="示例：已打开会话目录"
+                          >
+                            打开目录
+                          </button>
+                        </div>
+                        <div class="setting-row">
+                          <div class="setting-copy">
+                            <strong>归档会话</strong
+                            ><small>归档不会删除 JSONL，可随时恢复。</small>
+                          </div>
+                          <button class="button" data-view="history">
+                            查看归档
+                          </button>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <div class="composer-zone">
+              <div class="queue">
+                <svg class="icon sm grip"><use href="#grip" /></svg
+                ><span>下一回合：完成后再检查 Windows PowerShell 路径。</span
+                ><button class="icon-btn queue-edit" title="编辑">
+                  <svg class="icon sm"><use href="#pen" /></svg></button
+                ><button class="icon-btn queue-remove" title="删除">
+                  <svg class="icon sm"><use href="#x" /></svg>
+                </button>
+              </div>
+              <div class="composer">
+                <textarea
+                  id="composer"
+                  rows="2"
+                  placeholder="向 2pi 描述任务"
+                ></textarea>
+                <div class="composer-foot">
+                  <button class="contract project-contract" data-menu="project">
+                    <svg class="icon sm"><use href="#folder" /></svg
+                    ><span>2pi</span
+                    ><svg class="icon sm"><use href="#chev" /></svg></button
+                  ><button class="contract" data-menu="model">
+                    <span>GPT-5.4</span
+                    ><svg class="icon sm"><use href="#chev" /></svg></button
+                  ><button class="contract" data-menu="effort">
+                    <svg class="icon sm"><use href="#brain" /></svg
+                    ><span>medium</span></button
+                  ><button class="contract" data-menu="mode">
+                    <svg class="icon sm"><use href="#shield" /></svg
+                    ><span>全自动</span></button
+                  ><button class="send" id="send" title="发送任务">
+                    <svg class="icon"><use href="#up" /></svg>
+                  </button>
+                </div>
+              </div>
+              <p class="composer-note">2pi 可能会出错，请检查重要改动。</p>
+            </div>
+          </section>
+          <aside class="review">
+            <header class="review-head">
+              <button class="icon-btn" data-view="complete" title="关闭改动">
+                <svg class="icon"><use href="#left" /></svg></button
+              ><strong>工作区改动</strong
+              ><button
+                class="button stage-action"
+                data-stage-label="已暂存全部"
+              >
+                暂存全部</button
+              ><button
+                class="icon-btn danger"
+                data-toast="示例：全部改动已还原"
+                title="还原全部"
+              >
+                <svg class="icon"><use href="#undo" /></svg>
+              </button>
+            </header>
+            <div class="review-layout">
+              <nav class="file-list">
+                <div class="file-status">
+                  <span>3 个文件</span><span>+34 / -9</span>
+                </div>
+                <button class="file-btn active" data-file="ipc">
+                  <span><strong>ipc.ts</strong><small>src/main</small></span
+                  ><span class="delta"
+                    >+8 <span class="minus">-2</span></span
+                  ></button
+                ><button class="file-btn" data-file="runtime">
+                  <span
+                    ><strong>agent-runtime.ts</strong
+                    ><small>src/main</small></span
+                  ><span class="delta"
+                    >+9 <span class="minus">-4</span></span
+                  ></button
+                ><button class="file-btn" data-file="test">
+                  <span
+                    ><strong>settings-store.test.ts</strong
+                    ><small>tests</small></span
+                  ><span class="delta">+17 <span class="minus">-3</span></span>
+                </button>
+              </nav>
+              <section class="diff-view">
+                <div class="diff-head">
+                  <svg class="icon sm"><use href="#chev" /></svg
+                  ><strong id="diffName"></strong
+                  ><button
+                    class="text-btn stage-action"
+                    data-stage-label="已暂存文件"
+                  >
+                    暂存文件</button
+                  ><button
+                    class="icon-btn danger"
+                    data-toast="示例：当前文件已还原"
+                  >
+                    <svg class="icon sm"><use href="#undo" /></svg>
+                  </button>
+                </div>
+                <div class="diff-lines" id="diffLines"></div>
+                <div class="comment-box" id="commentBox">
+                  <textarea placeholder="为这一行留下反馈"></textarea>
+                  <div class="comment-actions">
+                    <button class="button cancel-comment">取消</button
+                    ><button class="button primary submit-comment">
+                      添加反馈
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </aside>
+        </div>
+      </main>
+      <div class="history-overlay">
+        <div class="history-dialog">
+          <label class="history-search"
+            ><svg class="icon"><use href="#search" /></svg
+            ><input
+              id="historyInput"
+              placeholder="搜索任务、项目或命令" /><button
+              class="icon-btn"
+              data-view="complete"
+            >
+              <svg class="icon"><use href="#x" /></svg></button
+          ></label>
+          <div class="history-results">
+            <div class="history-section">最近</div>
+            <button
+              class="history-result selected"
+              data-text="设置 保存 模型 2pi"
+            >
+              <svg class="icon"><use href="#history" /></svg
+              ><span
+                ><strong>修复设置保存顺序</strong
+                ><small>2pi · 修改 3 个文件 · 42 项测试通过</small></span
+              ><time>今天 11:18</time></button
+            ><button class="history-result" data-text="provider 类型 重构 2pi">
+              <svg class="icon"><use href="#history" /></svg
+              ><span
+                ><strong>重构 Provider 类型</strong
+                ><small>2pi · 已完成</small></span
+              ><time>今天 10:42</time></button
+            ><button class="history-result" data-text="windows 启动 回退 2pi">
+              <svg class="icon"><use href="#history" /></svg
+              ><span
+                ><strong>检查 Windows 启动回退</strong
+                ><small>2pi · 已完成</small></span
+              ><time>昨天</time>
+            </button>
+            <div class="history-section">已固定</div>
+            <button class="history-result" data-text="发布 清单 notes">
+              <svg class="icon"><use href="#folder" /></svg
+              ><span
+                ><strong>0.1 发布清单</strong
+                ><small>notes · 已固定</small></span
+              ><time>上周五</time>
+            </button>
+            <div class="history-empty">没有匹配的运行记录</div>
+          </div>
+        </div>
+      </div>
+      <div id="popover" class="popover" role="listbox" hidden></div>
+      <div class="toast" id="toast" role="status" hidden>
+        <svg class="icon sm"><use href="#check" /></svg><span></span>
+      </div>
+      <nav class="dock">
+        <span>0.145.0 示例</span><button data-view="onboarding">首次配置</button
+        ><button data-view="new">新任务</button
+        ><button data-view="run">运行中</button
+        ><button data-view="cancelled">已中止</button
+        ><button data-view="complete">已完成</button
+        ><button data-view="diff">Diff</button
+        ><button data-view="history">记录</button
+        ><button data-view="settings">设置</button>
+      </nav>
+    </div>
+    <script>
+      const app = document.querySelector("#app"),
+        params = new URLSearchParams(location.search),
+        popover = document.querySelector("#popover"),
+        composer = document.querySelector("#composer"),
+        send = document.querySelector("#send");
+      const screens = {
+        onboarding: "onboarding",
+        new: "new",
+        run: "run",
+        cancelled: "cancelled",
+        complete: "complete",
+        diff: "complete",
+        history: "complete",
+        settings: "settings",
+      };
+      const headers = {
+        onboarding: ["开始使用 2pi", "本地配置"],
+        new: ["新任务", "2pi · main · /home/lin/projects/2pi"],
+        run: ["修复设置保存顺序", "2pi · main · /home/lin/projects/2pi"],
+        cancelled: ["修复设置保存顺序", "任务已中止 · 会话已保留"],
+        complete: ["修复设置保存顺序", "2pi · main · /home/lin/projects/2pi"],
+        diff: ["修复设置保存顺序", "2pi · main · /home/lin/projects/2pi"],
+        history: ["修复设置保存顺序", "2pi · main · /home/lin/projects/2pi"],
+        settings: ["设置", "全局配置 · 下次任务生效"],
+      };
+      const menus = {
+        project: {
+          title: "当前项目",
+          items: [
+            ["2pi", "/home/lin/projects/2pi"],
+            ["notes", "/home/lin/documents/notes"],
+          ],
+        },
+        model: {
+          title: "选择模型",
+          items: [
+            ["GPT-5.4", "适合复杂编码任务"],
+            ["GPT-5.4 mini", "更快处理轻量任务"],
+            ["Claude Sonnet 4.5", "Anthropic"],
+          ],
+        },
+        effort: {
+          title: "思考强度",
+          items: [
+            ["low", "更快完成直接任务"],
+            ["medium", "速度与质量平衡"],
+            ["high", "复杂分析与边界检查"],
+            ["xhigh", "更深入的推理"],
+          ],
+        },
+        mode: {
+          title: "执行档位",
+          items: [
+            ["全自动", "允许读取、命令和修改"],
+            ["只读", "仅允许读取、搜索和列举文件"],
+          ],
+        },
+      };
+      const diffs = {
+        ipc: {
+          name: "src/main/ipc.ts",
+          lines: [
+            ["", "118", "118", "const saved = await settingsStore.save(input)"],
+            ["del", "119", "", "- await runtime.restoreSession(sessionId)"],
+            ["add", "", "119", "+ await runtime.rebind(saved)"],
+            ["add", "", "120", "+ await runtime.restoreSession(sessionId)"],
+            ["", "121", "121", "return saved"],
+          ],
+        },
+        runtime: {
+          name: "src/main/agent-runtime.ts",
+          lines: [
+            ["", "71", "71", "async restore(settings, historyPath) {"],
+            ["del", "72", "", "-  await this.session.restore(historyPath)"],
+            ["del", "73", "", "-  this.activeModel = settings.activeModel"],
+            ["add", "", "72", "+  await this.rebind(settings.activeModel)"],
+            ["add", "", "73", "+  await this.session.restore(historyPath)"],
+            ["", "74", "74", "}"],
+          ],
+        },
+        test: {
+          name: "tests/settings-store.test.ts",
+          lines: [
+            ["", "84", "84", "describe('runtime rebinding', () => {"],
+            [
+              "add",
+              "",
+              "85",
+              "+  it('rebinds before restoring history', async () => {",
+            ],
+            ["add", "", "86", "+    await saveAndRestore(nextSettings)"],
+            [
+              "add",
+              "",
+              "87",
+              "+    expect(runtime.calls).toEqual(['rebind', 'restore'])",
+            ],
+            ["add", "", "88", "+  })"],
+            ["", "89", "89", "})"],
+          ],
+        },
+      };
+      function esc(value) {
+        return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
+      }
+      function svg(id, extra) {
+        return (
+          '<svg class="icon ' +
+          (extra || "") +
+          '"><use href="#' +
+          id +
+          '"/></svg>'
+        );
+      }
+      function closeMenu() {
+        popover.hidden = true;
+        document
+          .querySelectorAll("[data-menu]")
+          .forEach((b) => b.setAttribute("aria-expanded", "false"));
+      }
+      function updateSend() {
+        const running = app.dataset.screen === "run";
+        send.innerHTML = svg(running ? "stop" : "up");
+        send.title = running ? "停止任务" : "发送任务";
+      }
+      function setView(view, push = true) {
+        if (!screens[view]) view = "run";
+        closeMenu();
+        app.dataset.view = view;
+        app.dataset.screen = screens[view];
+        document.querySelector("#headerTitle").textContent = headers[view][0];
+        document.querySelector("#headerMeta").textContent = headers[view][1];
+        document.querySelector("#currentThreadMeta").textContent =
+          view === "run"
+            ? "正在运行 · 2 分钟"
+            : view === "cancelled"
+              ? "已中止 · 刚刚"
+              : ["complete", "diff", "history"].includes(view)
+                ? "已完成 · 刚刚"
+                : "已完成 · 今天";
+        document
+          .querySelectorAll(".dock [data-view]")
+          .forEach((b) =>
+            b.classList.toggle("active", b.dataset.view === view),
+          );
+        document
+          .querySelectorAll(".thread")
+          .forEach((b) =>
+            b.classList.toggle(
+              "active",
+              b.hasAttribute("data-current-thread") &&
+                ["run", "cancelled", "complete", "diff", "history"].includes(
+                  view,
+                ),
+            ),
+          );
+        updateSend();
+        params.set("view", view);
+        if (push)
+          history.replaceState(null, "", location.pathname + "?" + params);
+        if (view === "history")
+          requestAnimationFrame(() =>
+            document.querySelector("#historyInput").focus(),
+          );
+      }
+      function openMenu(button) {
+        const data = menus[button.dataset.menu],
+          current = button.querySelector("span").textContent.trim();
+        popover.innerHTML =
+          '<div class="popover-head">' +
+          data.title +
+          "</div>" +
+          data.items
+            .map(
+              (item) =>
+                '<button class="popover-option ' +
+                (item[0] === current ? "selected" : "") +
+                '" data-value="' +
+                item[0] +
+                '"><span><strong>' +
+                item[0] +
+                "</strong><small>" +
+                item[1] +
+                "</small></span>" +
+                svg("check", "sm check") +
+                "</button>",
+            )
+            .join("");
+        popover.hidden = false;
+        const r = button.getBoundingClientRect(),
+          h = popover.offsetHeight,
+          w = popover.offsetWidth;
+        popover.style.left =
+          Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+        popover.style.top = Math.max(8, r.top - h - 9) + "px";
+        popover.dataset.owner = button.dataset.menu;
+        button.setAttribute("aria-expanded", "true");
+        popover.querySelector(".selected,.popover-option").focus();
+      }
+      function renderDiff(key) {
+        const d = diffs[key];
+        document.querySelector("#diffName").textContent = d.name;
+        document.querySelector("#diffLines").innerHTML = d.lines
+          .map(
+            (line, i) =>
+              '<div class="diff-line ' +
+              line[0] +
+              '"><span class="ln">' +
+              line[1] +
+              '</span><span class="ln">' +
+              line[2] +
+              "</span><code>" +
+              esc(line[3]) +
+              '</code><button class="line-comment" data-line="' +
+              (i + 1) +
+              '">' +
+              svg("plus", "sm") +
+              "</button></div>",
+          )
+          .join("");
+        document.querySelector("#commentBox").classList.remove("open");
+      }
+      function setupStep(step) {
+        document
+          .querySelectorAll("[data-step]")
+          .forEach((x) =>
+            x.classList.toggle("active", x.dataset.step === step),
+          );
+        document
+          .querySelectorAll("[data-panel]")
+          .forEach((x) =>
+            x.classList.toggle("active", x.dataset.panel === step),
+          );
+      }
+      let toastTimer;
+      function showToast(message) {
+        const toast = document.querySelector("#toast");
+        toast.querySelector("span").textContent = message;
+        toast.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => (toast.hidden = true), 1800);
+      }
+      document.addEventListener("click", (e) => {
+        const view = e.target.closest("[data-view]");
+        if (view) {
+          e.preventDefault();
+          setView(view.dataset.view);
+        }
+        const toolSummary = e.target.closest(".tool-group>summary");
+        if (toolSummary) {
+          e.preventDefault();
+          const group = toolSummary.parentElement;
+          group.open = !group.open;
+        }
+        const ph = e.target.closest(".project-head");
+        if (ph) {
+          const p = ph.closest(".project");
+          p.classList.toggle("open");
+          ph.setAttribute(
+            "aria-expanded",
+            String(p.classList.contains("open")),
+          );
+        }
+        const mb = e.target.closest("[data-menu]");
+        if (mb) {
+          e.preventDefault();
+          openMenu(mb);
+        }
+        const opt = e.target.closest(".popover-option");
+        if (opt) {
+          const owner = document.querySelector(
+            '[data-menu="' + popover.dataset.owner + '"]',
+          );
+          owner.querySelector("span").textContent = opt.dataset.value;
+          closeMenu();
+          owner.focus();
+        }
+        if (!e.target.closest(".popover") && !e.target.closest("[data-menu]"))
+          closeMenu();
+        const tab = e.target.closest("[data-tab]");
+        if (tab) {
+          document
+            .querySelectorAll("[data-tab]")
+            .forEach((x) => x.classList.toggle("active", x === tab));
+          document
+            .querySelectorAll("[data-pane]")
+            .forEach((x) =>
+              x.classList.toggle("active", x.dataset.pane === tab.dataset.tab),
+            );
+        }
+        const tog = e.target.closest(".toggle");
+        if (tog) {
+          tog.classList.toggle("on");
+          tog.setAttribute(
+            "aria-checked",
+            String(tog.classList.contains("on")),
+          );
+        }
+        const chip = e.target.closest(".tool-chip");
+        if (chip)
+          chip.setAttribute(
+            "aria-pressed",
+            String(chip.getAttribute("aria-pressed") !== "true"),
+          );
+        const next = e.target.closest(".step-next");
+        if (next) setupStep(next.dataset.next);
+        const suggestion = e.target.closest("[data-prompt]");
+        if (suggestion) {
+          composer.value = suggestion.dataset.prompt;
+          composer.focus();
+          composer.dispatchEvent(new Event("input"));
+        }
+        const queueEdit = e.target.closest(".queue-edit");
+        if (queueEdit) {
+          const text = queueEdit.closest(".queue").querySelector("span");
+          text.contentEditable = text.contentEditable !== "true";
+          if (text.contentEditable === "true") {
+            text.focus();
+            document.execCommand("selectAll", false, null);
+          } else {
+            showToast("排队消息已更新");
+          }
+        }
+        const qr = e.target.closest(".queue-remove");
+        if (qr) {
+          const q = qr.closest(".queue"),
+            remove = () => q.remove();
+          if (matchMedia("(prefers-reduced-motion:reduce)").matches) remove();
+          else
+            q.animate(
+              [
+                { opacity: 1, transform: "translateY(0)" },
+                {
+                  opacity: 0,
+                  transform: "translateY(-5px)",
+                  filter: "blur(2px)",
+                },
+              ],
+              { duration: 150, easing: "ease-in" },
+            ).finished.then(remove);
+        }
+        const fb = e.target.closest("[data-file]");
+        if (fb) {
+          document
+            .querySelectorAll("[data-file]")
+            .forEach((x) => x.classList.toggle("active", x === fb));
+          renderDiff(fb.dataset.file);
+        }
+        const lc = e.target.closest(".line-comment");
+        if (lc) {
+          const box = document.querySelector("#commentBox");
+          box.classList.add("open");
+          box.querySelector("textarea").placeholder =
+            "为第 " + lc.dataset.line + " 行留下反馈";
+          box.querySelector("textarea").focus();
+        }
+        if (e.target.closest(".cancel-comment"))
+          document.querySelector("#commentBox").classList.remove("open");
+        if (e.target.closest(".submit-comment")) {
+          document.querySelector("#commentBox").classList.remove("open");
+          showToast("行内反馈已添加");
+        }
+        const stage = e.target.closest(".stage-action");
+        if (stage && !stage.disabled) {
+          stage.textContent = stage.dataset.stageLabel;
+          stage.disabled = true;
+          showToast(stage.dataset.stageLabel);
+        }
+        const toastAction = e.target.closest("[data-toast]");
+        if (toastAction) showToast(toastAction.dataset.toast);
+      });
+      document
+        .querySelector("#collapseSide")
+        .addEventListener("click", () => app.classList.toggle("side-closed"));
+      send.addEventListener("click", () =>
+        setView(app.dataset.screen === "run" ? "cancelled" : "run"),
+      );
+      composer.addEventListener("input", () => {
+        composer.style.height = "auto";
+        composer.style.height = Math.min(composer.scrollHeight, 180) + "px";
+      });
+      document.querySelector("#historyInput").addEventListener("input", (e) => {
+        let count = 0,
+          q = e.target.value.trim().toLowerCase();
+        document.querySelectorAll(".history-result").forEach((item) => {
+          const show = item.dataset.text.toLowerCase().includes(q);
+          item.style.display = show ? "" : "none";
+          if (show) count++;
+        });
+        document.querySelector(".history-empty").style.display = count
+          ? "none"
+          : "block";
+      });
+      document
+        .querySelector(".history-overlay")
+        .addEventListener("click", (e) => {
+          if (e.target.classList.contains("history-overlay"))
+            setView("complete");
+        });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          if (!popover.hidden) closeMenu();
+          else if (["history", "diff", "settings"].includes(app.dataset.view))
+            setView("complete");
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          setView("history");
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
+          e.preventDefault();
+          setView("new");
+        }
+      });
+      renderDiff("ipc");
+      setView(params.get("view") || "run", false);
+      let seconds = 24;
+      setInterval(() => {
+        if (app.dataset.screen !== "run") return;
+        seconds++;
+        document.querySelector("#elapsed").textContent =
+          String(Math.floor(seconds / 60)).padStart(2, "0") +
+          ":" +
+          String(seconds % 60).padStart(2, "0");
+      }, 1000);
+    </script>
+  </body>
+</html>

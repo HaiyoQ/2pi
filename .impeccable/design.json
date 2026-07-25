@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-25T00:00:00+08:00",
+  "title": "Design System: 2pi Codex Desktop Reference",
+  "extensions": {
+    "colorMeta": {
+      "canvas": { "role": "neutral", "displayName": "Transcript White", "canonical": "#ffffff" },
+      "sidebar": { "role": "neutral", "displayName": "Warm Navigation", "canonical": "#f7f7f5" },
+      "ink": { "role": "primary", "displayName": "Codex Ink", "canonical": "#20201e" },
+      "success": { "role": "status", "displayName": "Verified Green", "canonical": "#16865c" },
+      "danger": { "role": "status", "displayName": "Failure Red", "canonical": "#c9473d" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Setup Display", "purpose": "First-run and empty-state headings only." },
+      "body": { "displayName": "Transcript Body", "purpose": "Task prompts and final responses." },
+      "control": { "displayName": "Desktop Control", "purpose": "Buttons, menus and setting labels." },
+      "code": { "displayName": "Observable Code", "purpose": "Commands, paths, output and diffs only." }
+    },
+    "shadows": [
+      { "name": "composer", "value": "0 8px 28px rgba(25,25,21,.08), 0 1px 2px rgba(25,25,21,.06)", "purpose": "Keeps the active composer distinguishable from the transcript." },
+      { "name": "popover", "value": "0 16px 45px rgba(25,25,21,.16), 0 2px 7px rgba(25,25,21,.06)", "purpose": "Temporary menus and search surfaces." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(.16,1,.3,1)", "purpose": "Disclosure, panel and popover transitions." },
+      { "name": "fast", "value": "140ms", "purpose": "Menu and hover feedback." },
+      { "name": "panel", "value": "220ms", "purpose": "Tool-chain and review-pane disclosure." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "850px" },
+      { "name": "review-constrained", "value": "1080px" }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "Codex, translated for 2pi",
+    "overview": "A compact desktop coding workspace built from neutral layers, an unframed transcript, semantic tool glyphs and progressive disclosure.",
+    "keyCharacteristics": ["Project-grouped history", "Observable tool chain", "Pinned run contract", "Right-side diff review"],
+    "rules": [
+      { "name": "Status-Only Color", "body": "Use chroma only for completion, failure, warning, focus and diff semantics.", "section": "colors" },
+      { "name": "Flat by Default", "body": "Use hairlines and tonal layers at rest; reserve shadows for temporary or active surfaces.", "section": "elevation" }
+    ],
+    "dos": ["Keep the transcript unframed.", "Summarize long tool output before raw details."],
+    "donts": ["Do not restore the discarded dark sidebar or colored icon tiles.", "Do not render raw reasoning or decorative gradients."]
+  }
+}

@@ -36,7 +36,7 @@
   },
   "build": {
     "appId": "cn.2pi.agent",
-    "productName": "2π 编程助手",
+    "productName": "2pi",
     "directories": {
       "output": "release"
     },

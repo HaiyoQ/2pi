@@ -27,8 +27,8 @@ async function createWindow(): Promise<void> {
     height: 840,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#f4f5f7',
-    title: '2π 编程助手',
+    backgroundColor: '#ffffff',
+    title: '2pi',
     webPreferences: createWebPreferences(join(__dirname, '../preload/index.mjs'))
   })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
